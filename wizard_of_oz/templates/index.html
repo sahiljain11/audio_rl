@@ -1,0 +1,22 @@
+{% extends 'basic_layout.html' %}
+
+{% block additional_styling %}
+
+{% endblock %}
+
+
+{% block page_content %}
+    <div class="bg-light border rounded-3 p-5">
+        <h1>Welcome</h1>
+        <p>Thank you for taking the time to be a part of this study. Before continuing, please ensure you are in a quiet environment where you will be undisturbed for the next 15 minutes.</p>
+        <button class="btn btn-primary" onclick="advance()">Next</button>
+    </div>
+{% endblock %}
+
+{% block script %}
+    <script>
+        function advance() {
+            window.location.replace("{{ url_for('consent') }}");
+        }
+    </script>
+{% endblock %}

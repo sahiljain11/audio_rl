@@ -1,0 +1,82 @@
+{% extends 'basic_layout.html' %}
+
+{% block additional_styling %}
+
+{% endblock %}
+
+
+{% block page_content %}
+    <h1>Audio Recording</h1>
+    <div class="bg-light border rounded-3 p-5">
+
+        <p>First, we will establish a baseline of how you speak.</p>
+        <p>
+            If the browser prompts for microphone access, click "Allow".
+            When you are ready, click "Start Recording" and speak the paragraph below in a normal voice.
+            When finished, press the button again to stop the recording.
+        </p>
+        <h3>Read the paragraph below:</h3>
+        <legend>
+            <p>
+                The beige hue on the waters of the loch impressed all, including the French queen, before she heard that symphony again, just as young Arthur wanted.
+                Mr. Dursley was the director of a firm called Grunnings, which made
+                drills. He was a big, beefy man with hardly any neck, although he did
+                have a very large mustache.
+            </p>
+        </legend>
+        <button class="btn btn-primary" onclick="toggleRecording()" id="toggleRec">Start Recording</button>
+        <button class="btn btn-primary" onclick="nextPage()" style="display: none" id="nxtPage">Next</button>
+    </div>
+{% endblock %}
+
+{% block script %}
+    <script>
+        const pid = "{{ pid }}";
+        let recording = false;
+
+        // Setup recording
+        let stream = null;
+        let recorder = null;
+        navigator.mediaDevices.getUserMedia({video: false, audio: true}).then(s => {
+            stream = s;
+            recorder = new RecordRTC(stream, {
+                type: 'audio',
+                mimeType: 'audio/wav',
+                recorderType: RecordRTC.StereoAudioRecorder
+            });
+        });
+
+
+
+        function nextPage() {
+            window.location.replace(`{{ url_for('instructions') }}?pid=${pid}`);
+        }
+        async function toggleRecording() {
+            const toggleRecBtn = document.getElementById("toggleRec");
+            const nextPageBtn = document.getElementById("nxtPage")
+
+            if (!recording) { // Start recording
+                toggleRecBtn.innerHTML = "Stop Recording";
+
+                recorder.startRecording();
+
+                recording = true
+            } else {  // Stop recording
+                toggleRecBtn.innerHTML = "Recording Complete";
+                toggleRecBtn.disabled = true; // Disable button
+                toggleRecBtn.style.display = 'none'; // Hide button
+
+                await recorder.stopRecording(function(){
+                    console.log('blob: ', recorder.getBlob());
+                    //uploadToS3(`pair_${pid.substring(1)}_teacher_baseline.wav`, recorder.getBlob(), false)
+                    uploadToServer(recorder.getBlob(), `pair_${pid.substring(1)}_teacher_baseline.wav`, function(){nextPageBtn.style.display = 'block';})
+                });
+
+                //setTimeout(function () {
+                //    nextPageBtn.style.display = 'block';
+                //}, 1); //Wait to upload to server (was 2000)
+
+            }
+        }
+    </script>
+{% endblock %}

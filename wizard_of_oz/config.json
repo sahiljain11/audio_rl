@@ -1,0 +1,63 @@
+{
+  "practice": {
+    "gameConfig": {
+      "map_size": [12, 12],
+      "max_steps": 100,
+      "num_bombs": 3,
+      "rng_seed": 42,
+      "initial_avoidance_dist": 3,
+      "rewards": {
+        "bomb":-10,
+        "acorn":5,
+        "delivered":10,
+        "wall":0,
+        "ts": -1,
+        "max_steps_exceeded": 0
+      },
+      "randomize_map": false,
+      "preset_map":
+          [[1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1],
+           [1 ,0 ,0 ,0 ,0 ,2 ,0 ,0 ,0 ,0 ,0 ,1],
+           [1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1],
+           [1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,3 ,1],
+           [1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1],
+           [1 ,0 ,0 ,0 ,0 ,2 ,0 ,0 ,0 ,0 ,0 ,1],
+           [1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1],
+           [1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1],
+           [1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1],
+           [1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,1],
+           [1 ,0 ,2 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,4 ,1],
+           [1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1]],
+      "preset_player_orientation": [0, 1],
+      "preset_player_location": [1, 2],
+      "rerandomize_player_start": false
+    },
+    "pregame_countdown_secs": 15,
+    "inter_episode_countdown_secs": 3,
+    "ms_per_ts": 1250,
+    "explore_after_n": 1
+  },
+  "actual": {
+    "gameConfig": {
+      "map_size": [12, 12],
+      "max_steps": 100,
+      "num_bombs": 3,
+      "initial_avoidance_dist": 3,
+      "rewards": {
+        "bomb":-10,
+        "acorn":5,
+        "delivered":10,
+        "ts": -1,
+        "wall":0,
+        "max_steps_exceeded": 0
+      },
+      "randomize_map": true,
+      "rerandomize_player_start": true
+    },
+    "num_rounds": 3,
+    "pregame_countdown_secs": 15,
+    "inter_episode_countdown_secs": 3,
+    "ms_per_ts": 1250,
+    "explore_after_n": 1
+  }
+}

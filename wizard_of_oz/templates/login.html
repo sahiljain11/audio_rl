@@ -1,0 +1,49 @@
+{% extends 'basic_layout.html' %}
+
+{% block additional_styling %}
+
+{% endblock %}
+
+
+{% block page_content %}
+    <h2>Login</h2>
+    <div class="bg-light border rounded-3 p-5">
+        <p>Enter your assigned player ID and click submit</p>
+        <form id="enterForm" onsubmit="event.preventDefault(); handleSubmit()">
+            <div class="form-group mb-3">
+                <input type="text" id="userName" name="name" placeholder="Player ID"><br>
+            </div>
+        </form>
+        <button class="btn btn-primary" onclick="handleSubmit()">Next</button>
+
+    </div>
+{% endblock %}
+
+{% block script %}
+    <script>
+    function handleSubmit() {
+        let username = document.getElementById("userName").value;
+        username = username.toUpperCase().trim()
+
+        if(!isValidUsername(username)) {
+            alert('Player ID invalid. Please check that the entered Player ID is correct.');
+            return;
+        } else {
+            if(username.substring(0, 1) === 'T') {
+                window.location.replace(`{{ url_for('baseline') }}?pid=${username}`)
+            } else {
+                window.location.replace(`{{ url_for('instructions') }}?pid=${username}`)
+            }
+        }
+    }
+    /**
+     * Check if username is valid (T or W followed by 5 digits
+     * @param name the username
+     * @returns {boolean} the valid
+     */
+    function isValidUsername(name) {
+        return !(name === "" || !/^[W,T]\d{5}$/.test(name));
+    }
+    </script>
+
+{% endblock %}

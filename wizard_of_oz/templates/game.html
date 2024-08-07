@@ -1,0 +1,889 @@
+{% extends 'basic_layout.html' %}
+
+{% block additional_styling %}
+<style>
+ #page-container {
+     min-width: 80vw;
+ }
+ #content-wrap {
+     min-width: 100%;
+ }
+ #content-wrap div {
+     min-width: 100%;
+ }
+ .pathFeedBackTableCell {
+    /* Width set in inline style for table */
+    height: 85px;
+     width:500px;
+
+     font-size: 1rem;
+}
+.stateFeedBackTableCell {
+    /* Width set in inline style for table */
+    height: 85px;
+     width:500px;
+
+     font-size: 1rem;
+}
+</style>
+{% endblock %}
+
+
+{% block page_content %}
+    <h1 id="round-title">Practice Round</h1>
+    <div id="instructions" class="bg-light border rounded-3 p-2 m-4" style="min-width:1340px; display: none">
+        <div id="instructions-text"></div>
+    </div>
+    <div class="bg-light border rounded-3 p-2" style="min-width:1340px">
+
+        <div id="loading-container">
+            <div class="container d-flex justify-content-center">
+                <div class="spinner-border text-primary" style="min-width: 20px;"></div>
+            </div>
+            <div class="container d-flex justify-content-center">
+                <p id="loading-message">Loading Message...</p>
+            </div>
+        </div>
+
+        <div id="canvasContainer" style="position: relative; display: none; min-width:1300px; max-width:1300px" class="container d-flex justify-content-center">
+            <canvas id="gameCanvas" width="1300" height="1000" style="width: 1300px; height: 1000px; display: none"></canvas>
+            <div id="canvasOverlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0;z-index: 10; background-color: rgba(0, 255, 166, 0.66); display: block">
+                <div style="display:flex;justify-content:center;align-items:center; width: auto; height: 1000px; position: absolute; top: 0; left: 0; right: 0; bottom: 0;">
+                    <h1 id="canvasOverlayMessage">Get Ready</h1>
+                </div>
+            </div>
+            <div id="feedback" style="position: absolute; top: 75px; left: 75px; right: 0; bottom: 0;z-index: 10; display: none">
+                <table class="table table-bordered border-primary" id="pathFeedbackTable" style="table-layout: fixed; width:845px;"> <!-- height set in .feedbackTableCell class -->
+                </table>
+                <table class="table table-bordered border-primary" id="stateFeedbackTable" style="table-layout: fixed; width:845px;"> <!-- height set in .feedbackTableCell class -->
+                </table>
+            </div>
+        </div>
+
+        <div id="feedbackControls" style="min-width: 100%; display: none">
+            <div class="container d-flex justify-content-center" style="min-width:100%;">
+{#                <button class="btn btn-warning m-2" onclick="showFeedbackInstructions(feedback_items[feedbackItemIdx])">Show Instructions</button>#}
+                <button class="btn btn-info m-2" onclick="clearFeedback(feedback_items[feedbackItemIdx])">Clear</button>
+                <button class="btn btn-primary m-2" onclick="doFeedbackItems(++feedbackItemIdx)">Next</button>
+            </div>
+        </div>
+
+        <!-- Turn timer progress bar currently not working -->
+        <div class="container d-flex justify-content-center" style="min-width:100%">
+            <div id="turn-timer" class="progress" style="display: none; max-width: 1300px; min-width:1300px;">
+                <div id="turn-timer-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0; min-width:0;"></div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block script %}
+    <script>
+        // Filled in via flask
+        let role = '{{ role }}';
+        let pid = '{{ pid }}';
+
+        // SocketIO conenction
+        let socket = null;
+
+        //const logger = Twilio.Video.Logger.getLogger('twilio-video');
+        //logger.setLevel('trace');
+
+        // HTML elements
+        const round_title = document.getElementById("round-title");
+        const instructions = document.getElementById("instructions")
+        const instructions_text = document.getElementById("instructions-text")
+        const loading_msg = document.getElementById("loading-message");
+        const loading_container = document.getElementById("loading-container");
+        const canvas_container = document.getElementById("canvasContainer");
+        const canvasOverlay = document.getElementById('canvasOverlay');
+        const canvasOverlayMessage = document.getElementById('canvasOverlayMessage');
+        const turnTimer = document.getElementById("turn-timer")
+        const turnTimerBar = document.getElementById("turn-timer-bar")
+        const gameCanvas = document.getElementById("gameCanvas");
+        const ctx = gameCanvas.getContext('2d');
+
+        // Game elements
+        let bomb = null
+        let squirrel = null
+        let acorn = null
+        let downarrow = null
+        let rover_north = null
+        let rover_west = null
+        let rover_east = null
+        let rover_south = null
+        let forest = null
+
+        // Set based on config
+        let MAP_HEIGHT_CELLS = null
+        let MAP_WIDTH_CELLS = null
+        let CELL_HEIGHT_PX = null
+        let CELL_WIDTH_PX = null
+
+        const GAME_HEIGHT = 1000
+        const GAME_WIDTH = 1000
+        const ARROW_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])
+
+        let config = {}
+        let game_loop_timer = null;
+        let turn_timer = null;
+        let keysdown = {};
+        let keypress_history = [];
+        let updated = false;
+
+        // Feedback variables
+        const ICON_SIZE = "30"
+        const HAPPY_FACE = `<span class="iconify" data-icon="bx:bx-happy-alt" data-width=${ICON_SIZE} data-height=${ICON_SIZE}></span>`
+        const SAD_FACE = `<span class="iconify" data-icon="bx:bx-tired" data-width=${ICON_SIZE} data-height=${ICON_SIZE}></span>`
+        const NEUTRAL_FACE = `<span class="iconify" data-icon="bx:bx-meh" data-width=${ICON_SIZE} data-height=${ICON_SIZE}></span>`
+        const EMOTION_ARR = [SAD_FACE, NEUTRAL_FACE, HAPPY_FACE]
+        const BG_COLOR_ARR = ['rgba(255, 0, 0, 0.3)', 'rgba(0, 0, 0, 0)', 'rgba(0, 255, 0, 0.5)']
+
+        let feedbackItemIdx = 0
+        const feedback_items = ["path", "state"]
+        const stateFeedbackTable = document.getElementById("stateFeedbackTable")
+        const pathFeedbackTable = document.getElementById("pathFeedbackTable")
+        const feedbackControls = document.getElementById("feedbackControls")
+        const feedbackContainer = document.getElementById("feedback")
+        let pathFeedbackCounter = 1
+        let pathFeedbackLastClickCellRC = null
+        let startingState = null  // save the starting state for use in feedback
+        let renderBot = true
+
+        // Audio Recorder
+        let recorder = null
+        let audio_element = null
+        let is_recording = false
+
+        // Timestamps
+        let game_rendered_timestamp = null  // Set each time renderFrame is called
+
+        // Setup event handlers
+        window.onload = function() {
+            socket = io();
+            socket.on('connect', function() {
+                console.log('connect')
+                socket.emit('connected', {pid: `${pid}`});
+            });
+
+            socket.on('disconnect', function(reason, details) {
+                console.log('disconnected')
+                console.log(reason)
+                console.log(details)
+            });
+
+            // Set loading message
+            if(role === 'T') {
+                loading_msg.innerHTML = 'Waiting for robot to wakeup... This may take a minute or two - Please be patient and alert';
+            } else {
+                loading_msg.innerHTML = 'Waiting for teacher... This may take a minute or two - Please be patient and alert';
+            }
+
+            // Set socket event handlers
+            socket.on("config", (data) => { // Game config info sent from server every round
+                console.log('config')
+                // Play start of round noise
+                let audio = new Audio("{{ url_for('static', filename='ping.mp3') }}");
+                audio.play();
+
+                console.log(`CONFIG: ${JSON.stringify(data)}`)
+                config = data;
+                updateConfigDependentVars();
+            });
+            socket.on("update", (data) => { // New Game state sent from server
+                console.log('update')
+                updated = true;
+                //keypress_history = []
+                //keysdown = {};
+                updateHandler(data);
+            });
+            socket.on("connect_audio", (data) => {
+                console.log('connect_audio')
+                let pair = pid.substring(1);
+
+                if (role !== data.role) return
+
+                //if (role === 'T' || true) {
+                if (role === 'T') {
+                    navigator.mediaDevices.enumerateDevices().then(devices => {
+                          const audioInput = devices.find(device => device.kind === 'audioinput');
+                          return Twilio.Video.createLocalTracks({audio: { deviceId: audioInput.deviceId }});
+                    }).then(localTracks => {
+                        return Twilio.Video.connect(data['token'], {name: pair, tracks: localTracks})
+                    }).then(room => {
+                        room.participants.forEach(handleAudioOnConnect);
+                        room.on('participantConnected', handleAudioOnConnect);
+                        room.on('participantDisconnected', handleAudioOnDisconnect);
+                        Promise.resolve();
+                    }).catch(e => {
+                        console.log(`Error connecting to Twilio room: ${JSON.stringify(e)}`);
+                        Promise.reject();
+                    })
+                } else { // If wizard, no input tracks are connected
+                    Twilio.Video
+                        .connect(data['token'], {name: pair, audio: false, video: false})
+                        .then(room => {
+                        room.participants.forEach(handleAudioOnConnect);
+                        room.on('participantConnected', handleAudioOnConnect);
+                        room.on('participantDisconnected', handleAudioOnDisconnect);
+                        Promise.resolve();
+                    }).catch(e => {
+                        console.log(`Error connecting to Twilio room: ${JSON.stringify(e)}`);
+                        Promise.reject();
+                    })
+                }
+            });
+
+            // Set keypress event handlers
+            if (role === 'W') {
+                window.addEventListener("keydown", function(e) {
+                    if(["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].indexOf(e.code) > -1) {
+                        e.preventDefault();
+                        keypress_history.push([e.key, 'keydown', Date.now()]);
+                    }
+                    //if(!(e.key in keysdown)) {
+                    //    keypress_history.push([e.key, 'keydown', Date.now()]);
+                    //}
+                    //console.log(e.key)
+                    //keysdown[e.key] = true;
+                }, false)
+
+                window.addEventListener("keyup", function(e) {
+                    //delete keysdown[e.key];
+                    //keypress_history.push([e.key, 'keyup', Date.now()]);
+                })
+            }
+        }
+
+        //window.addEventListener('beforeunload', function(){
+        //    console.log('beforeunload')
+        //    if (socket !== null) {
+        //        socket.close();
+        //    }
+        //});
+
+        function updateConfigDependentVars() {
+            // Game dimensions
+            MAP_HEIGHT_CELLS = config['gameConfig']['map_size'][1]
+            MAP_WIDTH_CELLS = config['gameConfig']['map_size'][0]
+            CELL_HEIGHT_PX = GAME_HEIGHT / MAP_HEIGHT_CELLS
+            CELL_WIDTH_PX = GAME_WIDTH / MAP_WIDTH_CELLS
+
+            // Game Resources
+            bomb = new Image(CELL_WIDTH_PX, CELL_HEIGHT_PX);
+            bomb.src = 'static/bomb.png'
+            squirrel = new Image(CELL_WIDTH_PX, CELL_HEIGHT_PX);
+            squirrel.src = 'static/squirrel.png'
+            acorn = new Image(CELL_WIDTH_PX, CELL_HEIGHT_PX);
+            acorn.src = 'static/nut.png';
+            downarrow = new Image(CELL_WIDTH_PX, CELL_HEIGHT_PX);
+            downarrow.src = 'static/arrow.png'
+            rover_north = new Image(CELL_WIDTH_PX, CELL_HEIGHT_PX);
+            rover_north.src = 'static/rover-north.png';
+            rover_west  = new Image(CELL_WIDTH_PX, CELL_HEIGHT_PX);
+            rover_west.src = 'static/rover-west.png';
+            rover_south = new Image(CELL_WIDTH_PX, CELL_HEIGHT_PX);
+            rover_south.src = 'static/rover-south.png';
+            rover_east  = new Image(CELL_WIDTH_PX, CELL_HEIGHT_PX);
+            rover_east.src = 'static/rover-east.png';
+            forest = new Image(CELL_WIDTH_PX, CELL_HEIGHT_PX);
+            forest.src = 'static/forest.png';
+
+            // Create State Feedback table based on map dimensions
+            createStateFeedbackTable();
+
+            // Create Path Feedback table based on map dimensions
+            //createPathFeedbackTable();
+        }
+
+        function updateHandler(data) {
+
+            console.log(`UPDATE: ${JSON.stringify(data)}`);
+            //keypress_history = []
+            //keysdown = {};
+
+            if(data['phase'] === 'COUNTDOWN') {
+                new_round = data['new_round']
+
+                // Set round title
+                if (data['round'] === 0) {
+                    round_title.innerHTML = 'Practice Round';
+                    instructions.style.display = 'block';
+
+                    if(role === 'T') {
+                        instructions_text.innerHTML = 'Help the robot collect the acorn and bring it to the squirrel by saying only "Yes" and "No"';
+                    } else {
+                        instructions_text.innerHTML = 'This is the practice round. You will be able to see important locations in gray. This round will use a different map than all other rounds.';
+                    }
+
+                } else if(data['round'] === 1) {
+                    round_title.innerHTML = `Round ${data['round']} of ${data['num_rounds']}`;
+                    instructions.style.display = 'block';
+
+                    if(role === 'T') {
+                        instructions_text.innerHTML = 'Help the robot collect the acorn and bring it to the squirrel by saying only "Yes" and "No"';
+                    } else {
+                        instructions_text.innerHTML = 'This round will use a DIFFERENT map. The important locations are hidden now. Try to figure out and remember their positions while playing the game.';
+                    }
+
+                } else {
+                    round_title.innerHTML = `Round ${data['round']} of ${data['num_rounds']}`;
+                    instructions.style.display = 'block';
+
+                    if(role === 'T') {
+                        instructions_text.innerHTML = 'Help the robot collect the acorn and bring it to the squirrel by saying only "Yes" and "No"';
+                    } else {
+                        instructions_text.innerHTML = 'This round uses the SAME map as before. The important locations are hidden now. Try to figure out and remember their positions while playing the game.';
+                    }
+                }
+
+                // Begin countdown to start game
+                loading_container.style.display = 'none';
+                canvas_container.style.display = 'block';
+
+                renderFrame(data['state']); // Render the first frame from env.reset()
+                startingState = data['state']
+
+                turnTimerBar.style.width = '0%'; // Clear turn timer
+                countDownAndShowCanvas((new_round) ? config['pregame_countdown_secs'] : config['inter_episode_countdown_secs'], data['round'], role === 'W', new_round);
+                startTurnTimer(config['pregame_countdown_secs']*1000)
+
+                if(role === 'W') {
+                    waitAndStartGameLoop((new_round) ? config['pregame_countdown_secs'] : config['inter_episode_countdown_secs']);
+                    if (!is_recording) {
+                        waitAndStartAudioRecording(config['pregame_countdown_secs']); // Only record audio (of teacher) on wizard side
+                    }
+                }
+            } else if(data['phase'] === 'STEP') {
+
+                // This is repeated from above in case the client rejoins partway through a game
+                // Set round title
+                if (data['round'] === 0) {
+                    round_title.innerHTML = 'Practice Round';
+                } else {
+                    round_title.innerHTML = `Round ${data['round']} of ${data['num_rounds']}`;
+                }
+
+                // Ensure game is showing
+                loading_container.style.display = 'none';
+                canvas_container.style.display = 'block';
+                
+                renderFrame(data['state'], data['round'] === 0);
+                
+                turnTimerBar.style.width = '0%'; // Clear turn timer
+                startTurnTimer(0)
+
+                // If game is not running, start it
+                if(role === 'W' && !game_loop_timer) {
+                    waitAndStartGameLoop(0);
+                }
+
+            } else if (data['phase'] === 'FEEDBACK') {
+                // Stop all timers
+                clearInterval(turn_timer);
+                clearInterval(game_loop_timer);
+                turnTimer.style.display = 'none';
+
+                // Send teacher to post game survey immediately
+                if (role === 'T') {
+                    window.location.replace(`{{ url_for('survey') }}?pid=${pid}`);
+                } else {
+                    // For wizard:
+
+                    // Stop audio recording
+                    stopAudioRecording()
+
+                    // Render first game state
+                    renderBot = false
+                    renderFrame(startingState);
+
+
+                    // Get feedback
+                    doFeedbackItems(feedbackItemIdx);
+                }
+            }
+        }
+
+        function countDownAndShowCanvas(secs, round_no, is_wizard, new_round) {
+            for(let s = 0; s <= secs; s++) {
+                setTimeout(function(){updateCountDown(secs-s, round_no, is_wizard, new_round)}, s*1000)
+            }
+        }
+
+        function updateCountDown(remaining_time, round_no, is_wizard, new_round) {
+            if (new_round) {
+                if (remaining_time === 0) {
+                    canvasOverlay.style.display = 'none';
+                    gameCanvas.style.display = 'block';
+
+                } else if (remaining_time > 7 && round_no >= 2) {
+                    canvasOverlay.style.display = 'block';
+                    canvasOverlayMessage.innerHTML = (is_wizard) ? `Nice work! Let's try the <u>same</u> map again! The key locations are still in the <u>same</u> position. ${remaining_time}` : `Nice work! Let's try the same map again! ${remaining_time}`;
+                } else if (round_no >= 2) {
+                    canvasOverlay.style.display = 'block';
+                    canvasOverlayMessage.innerHTML = (is_wizard) ? `Try to figure out the key locations ${remaining_time}` : `Nice work! Let's try the same map again! ${remaining_time}`;
+                } else if (round_no === 1) {
+                    canvasOverlay.style.display = 'block';
+                    canvasOverlayMessage.innerHTML = (is_wizard) ? `Good job practicing! Let's move on to the actual round. The key locations will be <u>hidden</u> now, and the map will be <u>different</u>. ${remaining_time}` : `Good job practicing! Let's move on to the actual round. The map will be different this time. ${remaining_time}`;
+                } else {
+                    canvasOverlay.style.display = 'block';
+                    canvasOverlayMessage.innerHTML = `Starting practice in ${remaining_time}`;
+                }
+            } else {
+                if (remaining_time === 0) {
+                    canvasOverlay.style.display = 'none';
+                    gameCanvas.style.display = 'block';
+
+                } else {
+                    canvasOverlay.style.display = 'block';
+                    canvasOverlayMessage.innerHTML = (is_wizard) ? `${remaining_time}` : `Uh oh! The rover hit a bomb - Let's try again! ${remaining_time}`
+                }
+            }
+        }
+
+        // Wait secs and then start game loop timer to call gameLoop() every ms_per_ts milliseconds
+        function waitAndStartGameLoop(secs) {
+            // Stop game if running
+            if (game_loop_timer) {
+                clearInterval(game_loop_timer);
+            }
+            setTimeout(function(){
+                //console.log(`Setting game loop timer to call gameLoop() every ${config['ms_per_ts']}ms`)
+                game_loop_timer = setInterval(gameLoop, config['ms_per_ts']);
+            }, secs*1000)
+        }
+
+        function gameLoop() {
+            if (!updated) return
+
+            updated = false;
+            // Send inputs
+            const temp = [...keypress_history]
+            console.log(temp.slice(-3))
+            socket.emit("step", {"keypress_hist": temp.slice(-3), "pid": pid, "keysdown": {...keysdown}, "game_rendered_timestamp": game_rendered_timestamp, "ts_end_timestamp": Date.now()})
+            //keypress_history = []
+            //keysdown = {};
+            // ---- Steps below are handled in sockets-io event handler
+            // Receive Updates
+            // Draw new frame
+        }
+
+        function renderFrame(info, is_practice ) {
+
+            // Defining variables so code is more concise
+            const map = info['map']
+            const player_location = info['player_location']
+            const player_orientation = info['player_orientation']
+            const timestep_reward = info['timestep_reward']
+            const has_acorn = info['has_acorn'];
+            const cumulative_reward = info['cumulative_reward']
+            const ts = info['ts']
+            const round_score = info['round_score']
+
+            // Clear the entire canvas
+            ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+            // Fill background based on acorn state
+            if (has_acorn && role === 'W') {
+                ctx.fillStyle = "skyblue"
+            } else {
+                ctx.fillStyle = "gray"
+            }
+            ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+            // Draw gridlines
+            for (let x = 0; x <= GAME_WIDTH; x += CELL_WIDTH_PX) {
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, GAME_HEIGHT);
+            }
+            for (let y = 0; y <= GAME_HEIGHT; y += CELL_HEIGHT_PX) {
+                ctx.moveTo(0, y);
+                ctx.lineTo(GAME_WIDTH, y);
+            }
+
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = "rgba(51, 51, 51, 0.7)";
+            ctx.stroke(); // Render lines on screen
+
+            // Draw cheatsheet for teacher
+            if (role === 'T') {
+                const rewards = config['gameConfig']['rewards'];
+                ctx.font = 'normal bold 50px serif';
+                ctx.fillStyle = 'black';
+                ctx.drawImage(bomb, GAME_WIDTH + 50, GAME_HEIGHT / 2 - 300, bomb.width, bomb.height);
+                ctx.fillText((rewards['bomb'] <= 0 ? "" : "+") + rewards['bomb'], GAME_WIDTH + 250, GAME_HEIGHT / 2 - 250);
+                ctx.drawImage(acorn, GAME_WIDTH + 50, GAME_HEIGHT / 2 - 100, acorn.width, acorn.height);
+                ctx.drawImage(downarrow, GAME_WIDTH + 50, GAME_HEIGHT / 2);
+                ctx.drawImage(squirrel, GAME_WIDTH + 50, GAME_HEIGHT / 2 + 90, squirrel.width, squirrel.height);
+                ctx.fillText((rewards['acorn'] <= 0 ? "" : "+") + rewards['acorn'], GAME_WIDTH + 250, GAME_HEIGHT / 2);
+                ctx.fillText((rewards['delivered'] <= 0 ? "" : "+") + rewards['delivered'], GAME_WIDTH + 250, GAME_HEIGHT / 2 + 50);
+
+
+                // Draw score box
+                ctx.fillStyle = '#A0522D';
+                ctx.fillRect(GAME_WIDTH + 138, GAME_HEIGHT / 2 + 325, 125, 50)
+
+                // Draw score
+                ctx.font = 'normal bold 50px serif';
+                ctx.fillStyle = 'black';
+                ctx.fillText(round_score + 100, GAME_WIDTH + 200, GAME_HEIGHT / 2 + 350)  // Score starts at 100
+
+                // Write score to canvas
+                ctx.textBaseline = 'middle';
+                ctx.textAlign = 'center';
+                ctx.font = 'normal bold 40px serif';
+                ctx.fillStyle = 'black';
+                ctx.fillText('Score', GAME_WIDTH + 200, GAME_HEIGHT / 2 + 300)
+            }
+
+            // Draw time left
+            ctx.textBaseline = 'middle';
+            ctx.textAlign = 'center';
+            ctx.font = 'normal bold 50px serif';
+            ctx.fillStyle = 'black';
+            ctx.fillText('Time left:', GAME_WIDTH + 100, GAME_HEIGHT / 2 + 425)
+            ctx.fillText(config['gameConfig']['max_steps'] - ts, GAME_WIDTH + 250, GAME_HEIGHT / 2 + 425);
+
+            // Draw map
+            for (let r = 0; r < map.length; r++) {
+                for (let c = 0; c < map.length; c++) {
+                    switch (map[r][c]) {
+                        case 1:
+                            ctx.drawImage(forest, c * CELL_WIDTH_PX, r * CELL_HEIGHT_PX, forest.width, forest.height);
+                            break;
+                        case 2:
+                            if (role === 'T') {
+                                ctx.drawImage(bomb, c * CELL_WIDTH_PX, r * CELL_HEIGHT_PX, bomb.width, bomb.height);
+                            } else if(is_practice) {
+                                ctx.fillStyle = 'rgb(102, 102, 102)';
+                                ctx.fillRect(c * CELL_WIDTH_PX, r * CELL_HEIGHT_PX, CELL_WIDTH_PX, CELL_HEIGHT_PX);
+                            }
+                            break;
+                        case 3:
+                            if (role === 'T') {
+                                ctx.drawImage(acorn, c * CELL_WIDTH_PX, r * CELL_HEIGHT_PX, acorn.width, acorn.height);
+                            } else if(is_practice) {
+                                ctx.fillStyle = 'rgb(102, 102, 102)';
+                                ctx.fillRect(c * CELL_WIDTH_PX, r * CELL_HEIGHT_PX, CELL_WIDTH_PX, CELL_HEIGHT_PX);
+                            }
+                            break;
+                        case 4:
+                            if (role === 'T') {
+                                ctx.drawImage(squirrel, c * CELL_WIDTH_PX, r * CELL_HEIGHT_PX, squirrel.width, squirrel.height);
+                            } else if (is_practice) {
+                                ctx.fillStyle = 'rgb(102, 102, 102)';
+                                ctx.fillRect(c * CELL_WIDTH_PX, r * CELL_HEIGHT_PX, CELL_WIDTH_PX, CELL_HEIGHT_PX);
+                            }
+                            break;
+                    }
+                }
+            }
+
+            if (renderBot) {
+                if (player_orientation[0] === 0 && player_orientation[1] === -1) {
+                    ctx.drawImage(rover_north, player_location[0] * CELL_WIDTH_PX, player_location[1] * CELL_HEIGHT_PX, rover_north.width, rover_north.height)
+                } else if (player_orientation[0] === 1 && player_orientation[1] === 0) {
+                    ctx.drawImage(rover_east, player_location[0] * CELL_WIDTH_PX, player_location[1] * CELL_HEIGHT_PX, rover_east.width, rover_east.height)
+                } else if (player_orientation[0] === 0 && player_orientation[1] === 1) {
+                    ctx.drawImage(rover_south, player_location[0] * CELL_WIDTH_PX, player_location[1] * CELL_HEIGHT_PX, rover_south.width, rover_south.height)
+                } else if (player_orientation[0] === -1 && player_orientation[1] === 0) {
+                    ctx.drawImage(rover_west, player_location[0] * CELL_WIDTH_PX, player_location[1] * CELL_HEIGHT_PX, rover_west.width, rover_west.height)
+                } else {
+                    ctx.drawImage(rover_west, player_location[0] * CELL_WIDTH_PX, player_location[1] * CELL_HEIGHT_PX, rover_west.width, rover_west.height)
+                }
+
+            }
+
+            // Set timestamp
+            game_rendered_timestamp = Date.now()
+        }
+
+
+        const animateCSS = (element, animation, prefix = 'animate__') =>
+        // We create a Promise and return it
+        new Promise((resolve, reject) => {
+            const animationName = `${prefix}${animation}`;
+            const node = document.querySelector(element);
+
+            node.classList.add(`${prefix}animated`, animationName);
+
+            // When the animation ends, we clean the classes and resolve the Promise
+            function handleAnimationEnd(event) {
+              event.stopPropagation();
+              node.classList.remove(`${prefix}animated`, animationName);
+              resolve('Animation ended');
+            }
+
+            node.addEventListener('animationend', handleAnimationEnd, {once: true});
+        })
+
+        function startTurnTimer(delay_ms) {
+            turnTimer.style.display = 'block'
+            setTimeout(function () {
+                if(turn_timer) {
+                    clearInterval(turn_timer);
+                }
+                turn_timer = setInterval(incrementTurnTimer, config['ms_per_ts']/10-2) // Start turn timer
+                turnTimerBar.style.transitionDuration = `${config['ms_per_ts']/10-2}ms`
+            }, delay_ms)
+        }
+
+        function incrementTurnTimer() {
+            let curVal = parseInt(turnTimerBar.style.width.replace('%', '')); // Drop % from width number
+            curVal+=10;
+
+            // Stop timer after turn is over
+            if (curVal >= 100) {
+                clearInterval(turn_timer)
+            }
+            turnTimerBar.style.width = `${curVal}%`
+            //console.log(`Set bar to ${curVal}`)
+        }
+
+        function showFeedbackInstructions(item) {
+            if (item === "path") {
+                instructions.style.display = 'block';
+                instructions_text.innerHTML = "Given that the rover starts in the yellow square, " +
+                        "click on the sequence of squares that form the optimal path to the goal." +
+                        "You can go over the same square more than once. To the clear path, click \"Clear\". When finished, click \"Next\"";
+            } else if(item === "state") {
+                instructions.style.display = 'block';
+                instructions_text.innerHTML = "Please mark the squares as good, neutral, or bad. " +
+                    "Note that a majority of squares may be neutral, with only a small number being good or bad. " +
+                    "Click on a square to cycle between good, bad, and neutral";
+            }
+        }
+
+        function doFeedbackItems(itemIdx) {
+            if (feedback_items[itemIdx] === "path") {
+                createPathFeedbackTable() // Recreate table here since I was having issues
+                // Show elements for path
+                pathFeedbackTable.style.display = 'block'
+                stateFeedbackTable.style.display = 'none'
+                feedbackControls.style.display = 'block'
+                feedbackContainer.style.display = 'block'
+
+                showFeedbackInstructions("path");
+
+            } else if (feedback_items[itemIdx] === "state") {
+                createStateFeedbackTable() // Recreate table here since I was having issues
+                // Show elements for state
+                pathFeedbackTable.style.display = 'none'
+                stateFeedbackTable.style.display = 'block'
+                feedbackControls.style.display = 'block'
+                feedbackContainer.style.display = 'block'
+
+                showFeedbackInstructions("state");
+
+            } else {
+                let path_arr = getPathFeedBackTableArr()
+                let state_arr = getStateFeedBackTableArr()
+                socket.emit('feedback', {pid:pid, state:state_arr, path:path_arr})
+                console.log("Submitted feedback")
+                window.location.replace(`{{ url_for('survey') }}?pid=${pid}`);
+            }
+        }
+
+        function clearFeedback(type) {
+            if (type === 'path') {
+                // Clear counter
+                pathFeedbackCounter = 1;
+                // Recreate path table
+                createPathFeedbackTable();
+            } else if (type === 'state') {
+                // Recreate state table
+                createStateFeedbackTable();
+            }
+        }
+
+        function createStateFeedbackTable() {
+            stateFeedbackTable.innerHTML = '';
+            for (let r=0; r<MAP_HEIGHT_CELLS-2; r++) {
+                let newRow = stateFeedbackTable.insertRow(r);
+                for (let c=0; c<MAP_WIDTH_CELLS-2; c++) {
+                    let newCell = newRow.insertCell(c);
+                    newCell.innerHTML = NEUTRAL_FACE
+                    newCell.classList.add('stateFeedBackTableCell')
+                    newCell.setAttribute("emotion_state", "1")
+                    newCell.onclick = function (e) {
+                        next_emotion_idx = (parseInt(this.getAttribute("emotion_state")) + 1) % EMOTION_ARR.length;
+                        this.innerHTML = EMOTION_ARR[next_emotion_idx];
+                        this.setAttribute("emotion_state", next_emotion_idx)
+                        this.style.backgroundColor = BG_COLOR_ARR[next_emotion_idx]
+                    }
+                }
+            }
+        }
+
+        function createPathFeedbackTable() {
+            pathFeedbackTable.innerHTML = '';
+            for (let r=0; r<MAP_HEIGHT_CELLS-2; r++) {
+                let newRow = pathFeedbackTable.insertRow(r);
+                for (let c=0; c<MAP_WIDTH_CELLS-2; c++) {
+                    let newCell = newRow.insertCell(c);
+                    newCell.classList.add('pathFeedBackTableCell')
+                    newCell.setAttribute("count", "[]")
+                    newCell.setAttribute("row", r)
+                    newCell.setAttribute("col", c)
+
+                    // If cur cell is starting cell
+                    console.log(startingState)
+                    if (r+1 === startingState['player_location'][1] && c+1 === startingState['player_location'][0]) {
+                        pathFeedbackLastClickCellRC = [r, c]
+                        let curCount = JSON.parse(newCell.getAttribute("count"))
+                        curCount.push(1)
+                        newCell.setAttribute("count", JSON.stringify(curCount));
+                        newCell.innerHTML = curCount.join(", ");
+                        newCell.style.backgroundColor = 'rgba(249,255,0,0.77)';
+                        pathFeedbackCounter=2;
+                    }
+
+                    newCell.onclick = function (e) {
+                        // If cell has never been set and is adjacent to current cell, then set to count
+                        let curCellRC = [this.getAttribute("row"), this.getAttribute("col")]
+                        if(pathFeedBackIsAdjacent(pathFeedbackLastClickCellRC, curCellRC)) {
+                            let curCount = JSON.parse(this.getAttribute("count"))
+                            curCount.push(pathFeedbackCounter)
+                            this.setAttribute("count", JSON.stringify(curCount));
+                            this.innerHTML = curCount.join(", ");
+                            this.style.backgroundColor = 'rgba(249,255,0,0.77)';
+                            pathFeedbackCounter++;
+                            pathFeedbackLastClickCellRC = curCellRC
+                        }
+                    }
+                }
+            }
+        }
+
+        function pathFeedBackIsAdjacent(prev, cur) {
+            return (Math.abs(prev[0] - cur[0]) + Math.abs(prev[1] - cur[1])) === 1 // Up, down, left, right
+        }
+
+        // Convert Feedback Table to JSON
+        function getStateFeedBackTableArr(){
+
+            let emotion_map_arr = []
+
+            let table = stateFeedbackTable;
+
+            for(let r = 0; r < table.rows.length; r++) {
+                let curRow = table.rows[r];
+                emotion_map_arr.push([])
+                for(let c = 0; c < curRow.cells.length; c++) {
+                    let curCell = curRow.cells[c];
+                    emotion_map_arr[r].push(curCell.getAttribute("emotion_state"))
+                }
+                console.log(emotion_map_arr)
+            }
+
+            return emotion_map_arr
+        }
+
+        function getPathFeedBackTableArr(){
+
+            let path_map_arr = []
+            let table = pathFeedbackTable
+
+            for(let r = 0; r < table.rows.length; r++) {
+                let curRow = table.rows[r];
+                path_map_arr.push([])
+                for(let c = 0; c < curRow.cells.length; c++) {
+                    let curCell = curRow.cells[c];
+                    path_map_arr[r].push(curCell.getAttribute("count"))
+                }
+                console.log(path_map_arr)
+            }
+
+            return path_map_arr
+        }
+
+        /* **************************
+         *    Twilio Stuff Below    *
+         ****************************/
+        // Reference docs: https://sdk.twilio.com/js/video/releases/2.18.3/docs/
+
+        // Called for every other participant already in the room (not for self) and every new participant that joins
+        function handleAudioOnConnect(participant) {
+            console.log('handleAudioOnConnect: called!', participant)
+
+            // Teacher shouldn't connect to any tracks
+            if (role === 'T') {
+                console.log('Connecting wizard audio (do nothing), returning')
+                return;
+            }
+            console.log('Connecting teacher audio')
+
+            const teacherAudio = document.getElementById('teacher-audio')
+
+            if (teacherAudio !== null) return
+
+            const div = document.createElement('div');
+            div.id = 'teacher-audio'
+            //div.id = participant.sid;
+            div.innerText = participant.identity;
+
+            participant.on('trackSubscribed', track => trackSubscribed(div, track));
+            participant.on('trackUnsubscribed', trackUnsubscribed);
+
+            participant.tracks.forEach(publication => {
+                if (publication.isSubscribed) {
+                    trackSubscribed(div, publication.track);
+                }
+            });
+
+            document.body.appendChild(div);
+        }
+
+        function handleAudioOnDisconnect(participant) {
+            console.log('Participant "%s" disconnected', participant.identity);
+            console.log(participant)
+            //document.getElementById(participant.sid).remove();
+        }
+
+        function trackSubscribed(div, track) {
+            div.appendChild(track.attach());
+        }
+
+        function trackUnsubscribed(track) {
+            track.detach().forEach(element => element.remove());
+        }
+
+        /* *******************************
+         *         Audio Recording       *
+         * *******************************/
+        function waitAndStartAudioRecording(secs) {
+            setTimeout(function(){
+                console.log("Creating audio_element and recorder")
+                audio_element = document.querySelector("#teacher-audio>audio")
+                console.log('a_e query: ', document.querySelector("#teacher-audio>audio"))
+                console.log('audio_element', audio_element)
+                console.log('audio_element stream', audio_element.captureStream())
+                recorder = new RecordRTC(audio_element.captureStream(), {
+                    type: 'audio',
+                    mimeType: 'audio/wav',
+                    recorderType: RecordRTC.StereoAudioRecorder
+                });
+                let curTimestamp = Date.now()
+                recorder.startRecording();
+                is_recording = true
+                socket.emit('audio_recording', {pid: pid, timestamp: curTimestamp, rec_started: true})
+                console.log('Started Recording')
+            }, secs*1000)
+        }
+
+        async function stopAudioRecording() {
+            console.log('Stopping recording')
+            let curTimestamp = Date.now();
+            await recorder.stopRecording(function () {
+                socket.emit('audio_recording', {pid: pid, timestamp: curTimestamp, rec_started: false})
+                is_recording = false
+                //uploadToS3(`pair_${pid.substring(1)}_session_audio.wav`, recorder.getBlob(), false)
+                console.log("####################################")
+                console.log("Uploading ", `pair_${pid.substring(1)}_session_audio.wav`)
+                console.log("####################################")
+                uploadToServer(recorder.getBlob(), `pair_${pid.substring(1)}_session_audio.wav`, function(){})
+            });
+        }
+
+    </script>
+{% endblock %}

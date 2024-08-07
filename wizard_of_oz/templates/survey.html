@@ -1,0 +1,22 @@
+{% extends 'basic_layout.html' %}
+
+{% block additional_styling %}
+
+{% endblock %}
+
+
+{% block page_content %}
+    <div class="bg-light border rounded-3 p-5">
+        <h1>Survey</h1>
+        <br>
+        <p>The final step is to complete a post game survey.</p>
+        <p>Click on "Launch" to open the survey in this window</p>
+{#        https://docs.google.com/forms/d/e/1FAIpQLScUjQapRf6Hc6aDml50K9oo2FI-gBMxibOV57kIzFW9iSuZzA/viewform #}
+        <a href="https://vuamsterdam.eu.qualtrics.com/jfe/form/SV_eLlWN4vL2NxEEke">
+            <button class="btn btn-primary">Launch</button>
+        </a>
+    </div>
+{% endblock %}
+
+{% block script %}
+{% endblock %}

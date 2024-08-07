@@ -1,0 +1,571 @@
+{% extends 'basic_layout.html' %}
+
+{% block additional_styling %}
+<style>
+ #page-container {
+     min-width: 80vw;
+ }
+ #content-wrap {
+     min-width: 100%;
+ }
+ #content-wrap div {
+     min-width: 100%;
+ }
+ .pathFeedBackTableCell {
+    /* Width set in inline style for table */
+    height: 85px;
+     width:500px;
+
+     font-size: 1rem;
+}
+.stateFeedBackTableCell {
+    /* Width set in inline style for table */
+    height: 85px;
+     width:500px;
+
+     font-size: 1rem;
+}
+</style>
+{% endblock %}
+
+
+{% block page_content %}
+    <h1 id="round-title">Practice Round</h1>
+    <div id="instructions" class="bg-light border rounded-3 p-2 m-4" style="min-width:1340px; display: none">
+        <div id="instructions-text"></div>
+    </div>
+    <div class="bg-light border rounded-3 p-2" style="min-width:1340px">
+
+        <div class="container d-flex justify-end">
+            <label for="jsonFile">Choose json data file: </label>
+            <input id="jsonFile" type="file" style="font-size: 1rem; margin-left: 1rem;" accept="application/json"/>
+        </div>
+        <div class="container d-flex justify-end">
+            <label for="audioFile">Choose audio file: </label>
+            <input id="audioFile" type="file" style="font-size: 1rem; margin-left: 3.4rem;" accept="audio/wav"/>
+        </div>
+        <div class="container d-flex justify-end">
+            <label for="selectRound">Select round: </label>
+            <select id="selectRound" style="font-size: 1rem; margin-left: 4.8rem; width: 200px;">
+            </select>
+        </div>
+        <div class="container d-flex justify-end">
+            <label for="selectEpisode">Select episode: </label>
+            <select id="selectEpisode" style="font-size: 1rem; margin-left: 3.4rem; width: 200px;">
+            </select>
+        </div>
+        <div class="container justify-end">
+            <button
+                id="exportButton"
+                style="border-radius: 0.25rem; font-size: 1rem; width: 420px; margin-top: 1rem"
+                onclick="getImagesFromCanvas()"
+                disabled
+            >
+                Export to Video (this may take a few minutes)
+            </button>
+        </div>
+        <div id="sliderDiv" class="container d-flex justify-content-center">
+            <p style="text-align: center; margin-top: 10px; margin-right: 8px;">Timestamp:</p>
+            <input id="timestampSlider" type="range" style="width: 20%;" disabled value="0" min="0" max="100"/>
+        </div>
+
+        <div id="canvasContainer" style="position: relative; display: block; min-width:1300px; max-width:1300px" class="container d-flex justify-content-center">
+            <canvas id="gameCanvas" width="1300" height="1000" style="width: 1300px; height: 1000px; display: block"></canvas>
+        </div>
+
+    </div>
+{% endblock %}
+
+{% block script %}
+    <script>
+        // Filled in via flask
+        let role = '{{ role }}';
+        let pid = '{{ pid }}';
+
+        // SocketIO conenction
+        let socket = null;
+
+        // HTML elements
+        const round_title = document.getElementById("round-title");
+        const instructions = document.getElementById("instructions")
+        const instructions_text = document.getElementById("instructions-text")
+        const canvas_container = document.getElementById("canvasContainer");
+        const gameCanvas = document.getElementById("gameCanvas");
+        const timestampSlider = document.getElementById("timestampSlider");
+        const exportButton = document.getElementById("exportButton");
+        const getRound = document.getElementById("selectRound");
+        const getEpisode = document.getElementById("selectEpisode");
+        const ctx = gameCanvas.getContext('2d');
+
+        const getAudioInput = document.getElementById('audioFile')
+        const getJsonInput  = document.getElementById('jsonFile')
+
+        getJsonInput.addEventListener('change',  jsonFileUpload, false);
+        getAudioInput.addEventListener('change', audioFileUpload, false);
+        timestampSlider.addEventListener('change', onSliderChange, false);
+        getRound.addEventListener('change', changeRound, false);
+        getEpisode.addEventListener('change', changeEpisode, false);
+
+        // Game elements
+        let bomb = null
+        let squirrel = null
+        let acorn = null
+        let downarrow = null
+        let rover_north = null
+        let rover_west = null
+        let rover_east = null
+        let rover_south = null
+        let forest = null
+        let audio_file = null
+        let audio_file_duration = 0
+        let audio = null
+
+        // Set based on config
+        let MAP_HEIGHT_CELLS = null
+        let MAP_WIDTH_CELLS = null
+        let CELL_HEIGHT_PX = null
+        let CELL_WIDTH_PX = null
+
+        const GAME_HEIGHT = 1000
+        const GAME_WIDTH = 1000
+        const ARROW_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])
+
+        let config = {}
+        let game_loop_timer = null;
+        let turn_timer = null;
+        let keysdown = {};
+        let keypress_history = [];
+
+        // Feedback variables
+        const ICON_SIZE = "30"
+        const HAPPY_FACE = `<span class="iconify" data-icon="bx:bx-happy-alt" data-width=${ICON_SIZE} data-height=${ICON_SIZE}></span>`
+        const SAD_FACE = `<span class="iconify" data-icon="bx:bx-tired" data-width=${ICON_SIZE} data-height=${ICON_SIZE}></span>`
+        const NEUTRAL_FACE = `<span class="iconify" data-icon="bx:bx-meh" data-width=${ICON_SIZE} data-height=${ICON_SIZE}></span>`
+        const EMOTION_ARR = [SAD_FACE, NEUTRAL_FACE, HAPPY_FACE]
+        const BG_COLOR_ARR = ['rgba(255, 0, 0, 0.3)', 'rgba(0, 0, 0, 0)', 'rgba(0, 255, 0, 0.5)']
+
+        let feedbackItemIdx = 0
+        const feedback_items = ["path", "state"]
+        const stateFeedbackTable = document.getElementById("stateFeedbackTable")
+        const pathFeedbackTable = document.getElementById("pathFeedbackTable")
+        const feedbackControls = document.getElementById("feedbackControls")
+        const feedbackContainer = document.getElementById("feedback")
+        let pathFeedbackCounter = 1
+        let pathFeedbackLastClickCellRC = null
+        let startingState = null  // save the starting state for use in feedback
+        let renderBot = true
+
+        // Audio Recorder
+        let recorder = null
+        let audio_element = null
+        let is_recording = false
+
+        // Timestamps
+        let game_rendered_timestamp = null  // Set each time renderFrame is called
+
+        let uploadedJsonData = null
+
+
+        function jsonFileUpload(evt) {
+            const json_file = evt.target.files[0]
+            const reader = new FileReader()
+
+            reader.readAsText(json_file)
+            reader.onload = (text) => {
+                uploadedJsonData = JSON.parse(text.target.result)
+                console.log(uploadedJsonData)
+
+                // use the 1st file from the list
+                config = uploadedJsonData['config']['actual']
+                updateConfigDependentVars()
+                setTimeout(function(){
+                    if (audio_file !== null) {
+                        exportButton.disabled = false
+                    }
+                    timestampSlider.disabled = false
+                    timestampSlider.min = 0
+
+                    const firstRound   = Object.keys(uploadedJsonData['log'])[0]
+                    const firstEpisode = Object.keys(uploadedJsonData['log'][firstRound])[0]
+                    const firstTimestamp = Object.keys(uploadedJsonData['log'][firstRound][firstEpisode])[0]
+
+                    const temp = Object.keys(uploadedJsonData['log'][firstRound][firstEpisode]).map(v => parseInt(v)).sort()
+                    timestampSlider.max = Math.max(...temp)
+                    
+                    Object.keys(uploadedJsonData['log']).map((v) => {
+                        const newOption = document.createElement('option')
+                        newOption.text = v
+                        newOption.value = v
+                        getRound.add(newOption)
+                    })
+
+                    Object.keys(uploadedJsonData['log'][firstRound]).map((v) => {
+                        const newOption = document.createElement('option')
+                        newOption.text = v
+                        newOption.value = v
+                        getEpisode.add(newOption)
+                    })
+
+
+                    getRound.value      = firstRound
+                    getRound.selected   = firstRound
+                    getEpisode.value    = firstEpisode
+                    getEpisode.selected = firstEpisode
+                    timestampSlider.value = temp[0]
+
+                    updateHandler(uploadedJsonData['log'][firstRound][firstEpisode][firstTimestamp])
+                }, 1*1000)
+            }
+        }
+
+        function audioFileUpload(evt) {
+            let fl_files = evt.target.files // JS FileList object
+
+            // use the 1st file from the list
+            audio_file = fl_files[0]
+
+            audio = new Audio(URL.createObjectURL(audio_file))
+            audio_file_duration = 0
+            audio.addEventListener('loadedmetadata', function() { 
+                // Access the duration of the audio file 
+                audio_file_duration = audio.duration
+
+                if (uploadedJsonData !== null) {
+                    exportButton.disabled = false
+                }
+            }); 
+        }
+
+        function onSliderChange() {
+            const exists = uploadedJsonData['log'][getRound.value][getEpisode.value][`${timestampSlider.value}`]
+            if (uploadedJsonData !== null && exists !== undefined) {
+                updateHandler(uploadedJsonData['log'][getRound.value][getEpisode.value][`${timestampSlider.value}`])
+            }
+        }
+
+        function changeRound(evt) {
+            while (getEpisode.hasChildNodes()) {
+                getEpisode.childNodes[0].remove()
+            }
+            getEpisode.option = []
+            Object.keys(uploadedJsonData['log'][evt.target.value]).map((v) => {
+                const newOption = document.createElement('option')
+                newOption.text = v
+                newOption.value = v
+                getEpisode.add(newOption)
+            })
+
+            const episode = Object.keys(uploadedJsonData['log'][evt.target.value])[0]
+            getEpisode.value = episode
+
+
+            const temp = Object.keys(uploadedJsonData['log'][evt.target.value][episode]).map(v => parseInt(v)).sort()
+            timestampSlider.max = Math.max(...temp)
+            timestampSlider.value = temp[0]
+
+            updateHandler(uploadedJsonData['log'][evt.target.value][episode][`${temp[0]}`])
+        }
+
+        function changeEpisode(evt) {
+            const temp = Object.keys(uploadedJsonData['log'][getRound.value][evt.target.value]).map(v => parseInt(v)).sort()
+            timestampSlider.max = Math.max(...temp)
+            timestampSlider.value = temp[0]
+            updateHandler(uploadedJsonData['log'][getRound.value][evt.target.value][`${temp[0]}`])
+        }
+
+        // Setup event handlers
+        window.onload = function() {
+            // Set keypress event handlers
+            window.addEventListener("keydown", function(e) {
+
+                if (e.code === 'ArrowLeft') {
+                    timestampSlider.value = parseInt(timestampSlider.value) - 1
+                    onSliderChange()
+                }
+                if (e.code === 'ArrowRight') {
+                    timestampSlider.value = parseInt(timestampSlider.value) + 1
+                    onSliderChange()
+                }
+            }, false)
+        }
+
+        function updateConfigDependentVars() {
+            // Game dimensions
+            MAP_HEIGHT_CELLS = config['gameConfig']['map_size'][1]
+            MAP_WIDTH_CELLS = config['gameConfig']['map_size'][0]
+            CELL_HEIGHT_PX = GAME_HEIGHT / MAP_HEIGHT_CELLS
+            CELL_WIDTH_PX = GAME_WIDTH / MAP_WIDTH_CELLS
+
+            // Game Resources
+            bomb = new Image(CELL_WIDTH_PX, CELL_HEIGHT_PX);
+            bomb.src = 'static/bomb.png'
+            squirrel = new Image(CELL_WIDTH_PX, CELL_HEIGHT_PX);
+            squirrel.src = 'static/squirrel.png'
+            acorn = new Image(CELL_WIDTH_PX, CELL_HEIGHT_PX);
+            acorn.src = 'static/nut.png';
+            downarrow = new Image(CELL_WIDTH_PX, CELL_HEIGHT_PX);
+            downarrow.src = 'static/arrow.png'
+            rover_north = new Image(CELL_WIDTH_PX, CELL_HEIGHT_PX);
+            rover_north.src = 'static/rover-north.png';
+            rover_west  = new Image(CELL_WIDTH_PX, CELL_HEIGHT_PX);
+            rover_west.src = 'static/rover-west.png';
+            rover_south = new Image(CELL_WIDTH_PX, CELL_HEIGHT_PX);
+            rover_south.src = 'static/rover-south.png';
+            rover_east  = new Image(CELL_WIDTH_PX, CELL_HEIGHT_PX);
+            rover_east.src = 'static/rover-east.png';
+            forest = new Image(CELL_WIDTH_PX, CELL_HEIGHT_PX);
+            forest.src = 'static/forest.png';
+
+            // Create State Feedback table based on map dimensions
+            //createStateFeedbackTable();
+
+            // Create Path Feedback table based on map dimensions
+            //createPathFeedbackTable();
+        }
+
+        function updateHandler(data) {
+
+            //console.log(`UPDATE: ${JSON.stringify(data)}`);
+
+            // This is repeated from above in case the client rejoins partway through a game
+            // Set round title
+            if (data['round'] === 0) {
+                round_title.innerHTML = 'Please Upload a Replay';
+            } else {
+                const temp = Object.keys(uploadedJsonData['log'][getRound.value][getEpisode.value]).map(v => parseInt(v)).sort()
+                timestampSlider.max = Math.max(...temp)
+                round_title.innerHTML = `Episode ${timestampSlider.value} of ${Math.max(...temp)}`;
+            }
+
+            // Ensure game is showing
+            canvas_container.style.display = 'block';
+                
+            renderFrame(data['info'], false);
+                
+            // If game is not running, start it
+            if(role === 'W' && !game_loop_timer) {
+                waitAndStartGameLoop(0);
+            }
+        }
+
+        // Wait secs and then start game loop timer to call gameLoop() every ms_per_ts milliseconds
+        function waitAndStartGameLoop(secs) {
+            // Stop game if running
+            if (game_loop_timer) {
+                clearInterval(game_loop_timer);
+            }
+            setTimeout(function(){
+                //console.log(`Setting game loop timer to call gameLoop() every ${config['ms_per_ts']}ms`)
+                game_loop_timer = setInterval(gameLoop, config['ms_per_ts']);
+            }, secs*1000)
+        }
+
+        function gameLoop() {
+            // Send inputs
+            //socket.emit("step", {"keypress_hist": keypress_history, "pid": pid, "keysdown": keysdown, "game_rendered_timestamp": game_rendered_timestamp, "ts_end_timestamp": Date.now()})
+            //keypress_history = []
+            // ---- Steps below are handled in sockets-io event handler
+            // Receive Updates
+            // Draw new frame
+        }
+
+        function renderFrame(info, is_practice) {
+
+            // Defining variables so code is more concise
+            const map = info['map']
+            const player_location = info['player_location']
+            const player_orientation = info['player_orientation']
+            const timestep_reward = info['timestep_reward']
+            const has_acorn = info['has_acorn'];
+            const cumulative_reward = info['cumulative_reward']
+            const ts = info['ts']
+            //const round_score = info['round_score']
+            const round_score = cumulative_reward
+
+            // Clear the entire canvas
+            ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+            // Fill background based on acorn state
+            if (has_acorn && role === 'W') {
+                ctx.fillStyle = "skyblue"
+            } else {
+                ctx.fillStyle = "gray"
+            }
+            ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+            // Draw gridlines
+            for (let x = 0; x <= GAME_WIDTH; x += CELL_WIDTH_PX) {
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, GAME_HEIGHT);
+            }
+            for (let y = 0; y <= GAME_HEIGHT; y += CELL_HEIGHT_PX) {
+                ctx.moveTo(0, y);
+                ctx.lineTo(GAME_WIDTH, y);
+            }
+
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = "rgba(51, 51, 51, 0.7)";
+            ctx.stroke(); // Render lines on screen
+
+            //console.log(CELL_HEIGHT_PX)
+            //console.log(CELL_WIDTH_PX)
+
+            // Draw cheatsheet for teacher
+            const rewards = config['gameConfig']['rewards'];
+            //console.log(rewards)
+            ctx.font = 'normal bold 50px serif';
+            ctx.fillStyle = 'black';
+            ctx.drawImage(bomb, GAME_WIDTH + 50, GAME_HEIGHT / 2 - 300, bomb.width, bomb.height);
+            ctx.fillText((rewards['bomb'] <= 0 ? "" : "+") + rewards['bomb'], GAME_WIDTH + 250, GAME_HEIGHT / 2 - 250);
+            ctx.drawImage(acorn, GAME_WIDTH + 50, GAME_HEIGHT / 2 - 100, acorn.width, acorn.height);
+            ctx.drawImage(downarrow, GAME_WIDTH + 50, GAME_HEIGHT / 2);
+            ctx.drawImage(squirrel, GAME_WIDTH + 50, GAME_HEIGHT / 2 + 90, squirrel.width, squirrel.height);
+            ctx.fillText((rewards['acorn'] <= 0 ? "" : "+") + rewards['acorn'], GAME_WIDTH + 250, GAME_HEIGHT / 2);
+            ctx.fillText((rewards['delivered'] <= 0 ? "" : "+") + rewards['delivered'], GAME_WIDTH + 250, GAME_HEIGHT / 2 + 50);
+
+
+            // Draw score box
+            ctx.fillStyle = '#A0522D';
+            ctx.fillRect(GAME_WIDTH + 138, GAME_HEIGHT / 2 + 325, 125, 50)
+
+            // Draw score
+            ctx.font = 'normal bold 50px serif';
+            ctx.fillStyle = 'black';
+            ctx.fillText(round_score + 100, GAME_WIDTH + 200, GAME_HEIGHT / 2 + 350)  // Score starts at 100
+
+            // Write score to canvas
+            ctx.textBaseline = 'middle';
+            ctx.textAlign = 'center';
+            ctx.font = 'normal bold 40px serif';
+            ctx.fillStyle = 'black';
+            ctx.fillText('Score', GAME_WIDTH + 200, GAME_HEIGHT / 2 + 300)
+
+            // Draw time left
+            ctx.textBaseline = 'middle';
+            ctx.textAlign = 'center';
+            ctx.font = 'normal bold 50px serif';
+            ctx.fillStyle = 'black';
+            ctx.fillText('Time left:', GAME_WIDTH + 100, GAME_HEIGHT / 2 + 425)
+            ctx.fillText(config['gameConfig']['max_steps'] - ts, GAME_WIDTH + 250, GAME_HEIGHT / 2 + 425);
+
+            // Draw map
+            for (let r = 0; r < map.length; r++) {
+                for (let c = 0; c < map.length; c++) {
+                    switch (map[r][c]) {
+                        case 1:
+                            ctx.drawImage(forest, c * CELL_WIDTH_PX, r * CELL_HEIGHT_PX, forest.width, forest.height);
+                            break;
+                        case 2:
+                            ctx.drawImage(bomb, c * CELL_WIDTH_PX, r * CELL_HEIGHT_PX, bomb.width, bomb.height);
+                            break;
+                        case 3:
+                            ctx.drawImage(acorn, c * CELL_WIDTH_PX, r * CELL_HEIGHT_PX, acorn.width, acorn.height);
+                            break;
+                        case 4:
+                            ctx.drawImage(squirrel, c * CELL_WIDTH_PX, r * CELL_HEIGHT_PX, squirrel.width, squirrel.height);
+                            break;
+                    }
+                }
+            }
+
+            if (renderBot) {
+                if (player_orientation[0] === 0 && player_orientation[1] === -1) {
+                    ctx.drawImage(rover_north, player_location[0] * CELL_WIDTH_PX, player_location[1] * CELL_HEIGHT_PX, rover_north.width, rover_north.height)
+                } else if (player_orientation[0] === 1 && player_orientation[1] === 0) {
+                    ctx.drawImage(rover_east, player_location[0] * CELL_WIDTH_PX, player_location[1] * CELL_HEIGHT_PX, rover_east.width, rover_east.height)
+                } else if (player_orientation[0] === 0 && player_orientation[1] === 1) {
+                    ctx.drawImage(rover_south, player_location[0] * CELL_WIDTH_PX, player_location[1] * CELL_HEIGHT_PX, rover_south.width, rover_south.height)
+                } else if (player_orientation[0] === -1 && player_orientation[1] === 0) {
+                    ctx.drawImage(rover_west, player_location[0] * CELL_WIDTH_PX, player_location[1] * CELL_HEIGHT_PX, rover_west.width, rover_west.height)
+                } else {
+                    ctx.drawImage(rover_west, player_location[0] * CELL_WIDTH_PX, player_location[1] * CELL_HEIGHT_PX, rover_west.width, rover_west.height)
+                }
+
+            }
+
+            // Set timestamp
+            game_rendered_timestamp = Date.now()
+        }
+
+
+        const animateCSS = (element, animation, prefix = 'animate__') =>
+        // We create a Promise and return it
+        new Promise((resolve, reject) => {
+            const animationName = `${prefix}${animation}`;
+            const node = document.querySelector(element);
+
+            node.classList.add(`${prefix}animated`, animationName);
+
+            // When the animation ends, we clean the classes and resolve the Promise
+            function handleAnimationEnd(event) {
+              event.stopPropagation();
+              node.classList.remove(`${prefix}animated`, animationName);
+              resolve('Animation ended');
+            }
+
+            node.addEventListener('animationend', handleAnimationEnd, {once: true});
+        })
+
+
+        const getImagesFromCanvas = () => {
+
+            const all_timestamps = Object.keys(uploadedJsonData['log'][getRound.value][getEpisode.value]).sort((v) => parseInt(v))
+            const all_ts = all_timestamps
+                            .filter((v) => uploadedJsonData['log'][getRound.value][getEpisode.value][v]['ts_end_timestamp'] !== undefined)
+                            .map((v) => uploadedJsonData['log'][getRound.value][getEpisode.value][v]['ts_end_timestamp'])
+
+            const min_ts = Math.min(...all_ts)
+            const max_ts = Math.max(...all_ts)
+            const last_timestamp = all_timestamps[all_timestamps.length - 1]
+            const MIME_TYPE = "image/png"
+
+            const formData = new FormData();
+            formData.append('audio.wav', audio_file)
+
+
+            const total_audio_duration = audio_file_duration
+            const rec_started_ts = uploadedJsonData['audio_log']['rec_started_ts']
+            const rec_stopped_ts = uploadedJsonData['audio_log']['rec_stopped_ts']
+            const total_recorded_audio_duration = (rec_stopped_ts - rec_started_ts) / 1000
+            
+            const multiplier = total_audio_duration / total_recorded_audio_duration
+
+            const startTime = multiplier * (min_ts - rec_started_ts) / 1000
+            const endTime   = multiplier * (max_ts - rec_started_ts) / 1000
+
+            all_timestamps.map((a) => {
+                updateHandler(uploadedJsonData['log'][getRound.value][getEpisode.value][a])
+
+                gameCanvas.toBlob((blob) => {
+                    formData.append(`image_${a.padStart(6, '0')}.png`, blob)
+                    //formData.append(`image_${a}.png`, blob)
+                    
+                    const numberOfForms = Array.from(formData.keys()).length
+
+                    if (numberOfForms == all_timestamps.length + 1) {
+                        fetch(`/convert_to_video?start_time=${startTime}&end_time=${endTime}`, {
+                            method: 'POST',
+                            body: formData,
+                        })
+                        .then((r) => r.blob())
+                        .then((blob) => {
+                            const a = document.createElement('a')
+                            document.body.appendChild(a)
+                            url = URL.createObjectURL(blob)
+                            a.href = url
+                            a.setAttribute('download', `${uploadedJsonData['pair']}_${getRound.value}_${getEpisode.value}.mp4`)
+                            a.click()
+                            setTimeout(() => {
+                              URL.revokeObjectURL(url)
+                              document.body.removeChild(a)
+                            }, 1000)
+                        })
+                    }
+                }, MIME_TYPE)
+            })
+
+        }
+
+
+    </script>
+{% endblock %}

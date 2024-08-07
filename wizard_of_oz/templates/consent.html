@@ -1,0 +1,29 @@
+{% extends 'basic_layout.html' %}
+
+{% block additional_styling %}
+
+{% endblock %}
+
+
+{% block page_content %}
+    <h2>Consent Form</h2>
+    <div class="bg-light border rounded-3 p-5">
+        <h2>Statement of Consent</h2>
+
+        <input id="consent" type="checkbox" name="consentCheckbox" required>
+        <label for="consent">I give my voluntary consent to take part in this study and have completed the consent form</label>
+        <button class="btn btn-primary" onclick="nextPage()">Continue</button>
+    </div>
+
+{% endblock %}
+
+{% block script %}
+    <script>
+        function nextPage() {
+            let checkBox = document.getElementById("consent");
+            if (checkBox.checked) {
+                window.location.replace("{{ url_for('login') }}")
+            }
+        }
+    </script>
+{% endblock %}

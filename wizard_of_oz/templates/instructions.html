@@ -1,0 +1,125 @@
+{% extends 'basic_layout.html' %}
+
+{% block additional_styling %}
+
+{% endblock %}
+
+{% block page_content %}
+    <h1 class="mb-3">Instructions</h1>
+
+    <div id="teacher-page1" style="display: none" class="bg-light border rounded-3 p-5">
+
+        <h2>What is this study about?</h2>
+        <p>As a participant of this study, you will teach a robot how to solve a game. In order to teach the agent how to win a game, you will provide the agent with negative or positive feedback. This feedback will help the agent understand when it's doing a good or bad job.</p>
+        <br>
+        <br>
+        <p>Please click "Next" when you're ready to move on.</p>
+
+        <button class="btn btn-primary" onclick="advance()">Next</button>
+    </div>
+
+    <div id="teacher-page2" style="display: none" class="bg-light border rounded-3 p-5">
+        <h2>Game Instructions</h2>
+        <p>The goal of the game is to deliver the acorn to the squirrel while avoiding the bombs. That is, the robot must drive over the acorn and then over the squirrel. Driving over a bomb will incur a penalty and reset the state of the game. The robot can move up, down, left, or right.</p>
+        <p>Round 0 will be a practice round. After that, rounds 1-3 will use the same map but a different starting location.</p>
+        <br>
+        <br>
+        <h3>Point System</h3>
+        <p>You will start with 100 points. Successfully picking up the acorn will give you 5 points and feeding the squirrel will give you 10 extra points. However, if you run into a bomb, the game starts over and you lose 10 points.</p>
+        <br>
+        <br>
+        <h2>YOUR JOB</h2>
+        <p>Your job is to use your voice to help the computer win the game. Please <strong>ONLY</strong> say <mark>"Yes" or "No"</mark> to provide feedback. Note that the computer is sensitive to how say these words, i.e., the expressivity of your voice, so imagine you are talking to a 2 year old or to a pet.</p>
+        <p>Keep in mind the computer cannot see the acorn, squirrels, or bombs, so it only has your voice for guidance.</p>
+        <p>Try to help the computer complete each round as quickly as possible.</p>
+        <br>
+        <br>
+        <p>Please click "Next" when you're ready to move on.</p>
+        <button class="btn btn-primary" onclick="advance()">Next</button>
+    </div>
+
+    <div id="teacher-page3" style="display: none" class="bg-light border rounded-3 p-5">
+        <h2>Key Points</h2>
+        <br>
+        <br>
+        <ul>
+            <li>You can ONLY say “yes” and “no”, no other words, but the robot is sensitive to how you say these words. Make sure you are as expressive as possible. Pretend you are talking to a 2 year old, that’s about how socially receptive the computer is!</li>
+            <li>The computer cannot see the nut, squirrel, or bombs, only an empty grid! It will only be able to learn from your audio, so make sure you give it clear cues when it does a good thing versus a bad thing.</li>
+            <li>Do not use the back button in the browser. Let the study coordinator know if anything goes wrong.</li>
+        </ul>
+        <br>
+        <br>
+        <p>Please click "Start Practice" when you're ready to start the game.</p>
+        <button class="btn btn-primary" onclick="advance()">Start Practice</button>
+    </div>
+
+    <div id="wizard-page1" style="display: none" class="bg-light border rounded-3 p-5">
+        <h2>Game Instructions</h2>
+        <p>This study involves a two player game.</p>
+        <p>One player can observe all the details of the game and provides live audio feedback to you in the form of "yes" and "no".</p>
+        <p>Your job is to play the game based on the feedback from the other player. <mark>Keep in mind you will have a limited view of the game while the other player has a more complete picture.</mark></p>
+        <p>Only you can hear the other player. The other player cannot hear you.</p>
+        <br>
+        <br>
+        <p>Please click "Next" when you're ready to move on.</p>
+        <button class="btn btn-primary" onclick="advance()">Next</button>
+    </div>
+
+    <div id="wizard-page2" style="display: none" class="bg-light border rounded-3 p-5">
+        <p>You will use the arrow keys (UP, DOWN, LEFT, RIGHT) to select an action.</p>
+        <p>If you do not select an action in a time step, the agent will take random actions, so <strong> please continue striking keys to keep moving based on your beliefs and feedback from the other player</strong></p>
+        <p>Also, please wait until the robot has made a step after pressing a key before continuing.</p>
+        <p>Round 0 will be a practice round. You will be able to see important locations on the map only during the practice. After that, you will get a new map. Rounds 1-3 will use the same map but you will start in a different location.</p>
+        <br>
+        <br>
+        <p>Please click "Next" when you're ready to move on.</p>
+        <button class="btn btn-primary" onclick="advance()">Next</button>
+    </div>
+
+    <div id="wizard-page3" style="display: none" class="bg-light border rounded-3 p-5">
+        <h2>Key Points</h2>
+        <ul>
+            <li>Your job is to play the game based on feedback from the other player. Try to complete each round as quickly as possible.</li>
+            <li>Use the arrow keys to play the game.</li>
+            <li><strong><mark>After the practice round, the map will be randomized once. Rounds 1-3 will use the same map.</mark></strong></li>
+            <li>Try to figure out and remember the positions of important locations on the map. We will ask about these later.</li>
+            <li>Do not use the back button in the browser. Let the study coordinator know if anything goes wrong.</li>
+        </ul>
+        <br>
+        <br>
+        <p>Please click "Start Practice" when you're ready to start the game.</p>
+        <button class="btn btn-primary" onclick="advance()">Start Practice</button>
+    </div>
+{%  endblock %}
+
+{% block script %}
+    <script>
+        let page = 0;
+        let role = '{{ role }}';
+        let pid = '{{ pid }}';
+        const teacher_pages = ["teacher-page1", "teacher-page2", "teacher-page3"];
+        const wizard_pages = ["wizard-page1", "wizard-page2", "wizard-page3"];
+
+        function advance() {
+            if ((role === 'T') && (page < teacher_pages.length - 1)) {
+                document.getElementById(teacher_pages[page]).style.display='none';
+                page++;
+                document.getElementById(teacher_pages[page]).style.display='block';
+            } else if ((role === 'W') && (page < wizard_pages.length - 1)) {
+                document.getElementById(wizard_pages[page]).style.display='none';
+                page++;
+                document.getElementById(wizard_pages[page]).style.display='block';
+            } else if (((role === 'W') && (page >= wizard_pages.length - 1)) || ((role === 'T') && (page >= teacher_pages.length - 1))) {
+                window.location.replace(`{{ url_for('game') }}?pid=${pid}`);
+            }
+        }
+
+        window.onload = function() {
+            if (role === 'T') {
+                document.getElementById(teacher_pages[page]).style.display = 'block';
+            } else {
+                document.getElementById(wizard_pages[page]).style.display = 'block';
+            }
+        }
+    </script>
+{% endblock %}
