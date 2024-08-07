@@ -4,4 +4,7 @@
 
 ![Atari on Javascript with Audio Recording](javatari/static/atari.png)
 
-INTERNATIONAL CONFERENCE ON MULTIMODAL INTERACTION (ICMI’24), November 4–8, 2024, San Jose, Costa Rica. ACM, New York, NY, USA, 29 pages. https://doi.org/10.1145/3678957.3685735
+# Citations
+If you would like to build on this work, please cite us using the following:
+
+Matilda Knierim, Sahil Jain, Murat Han Aydoğan, Kenneth Mitra, Kush Desai, Akanksha Saran, and Kim Baraka. 2024. Prosody as a Teaching Signal for Agent Learning: Exploratory Studies and Algorithmic Implications
