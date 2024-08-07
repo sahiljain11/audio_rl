@@ -1,0 +1,103 @@
+<DOCTYPE html>
+<html>
+
+<!-- Yandex.Metrika counter --> <script type="text/javascript"> (function (d, w, c) { (w[c] = w[c] || []).push(function() { try { w.yaCounter41793274 = new Ya.Metrika({ id:41793274, clickmap:true, trackLinks:true, accurateTrackBounce:true }); } catch(e) { } }); var n = d.getElementsByTagName("script")[0], s = d.createElement("script"), f = function () { n.parentNode.insertBefore(s, n); }; s.type = "text/javascript"; s.async = true; s.src = "https://mc.yandex.ru/metrika/watch.js"; if (w.opera == "[object Opera]") { d.addEventListener("DOMContentLoaded", f, false); } else { f(); } })(document, window, "yandex_metrika_callbacks"); </script> <noscript><div><img src="https://mc.yandex.ru/watch/41793274" style="position:absolute; left:-9999px;" alt="" /></div></noscript> <!-- /Yandex.Metrika counter -->
+    <!audio width="300" height="300" id="my-preview" class="my-preview" autoplay muted></audio>
+    <div><audio controls autoplay playsinline hidden></audio></div>
+
+    <head lang="en">
+        <meta charset="UTF-8">
+        <title>RoboAtari</title>
+        <script src="https://www.WebRTC-Experiment.com/RecordRTC.js"></script>
+        <script type="text/javascript" 
+                src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+        <script type="text/javascript"> var replay = '{{replay}}'==='True';</script>
+        <script type="text/javascript"> var rom = '{{rom}}';</script>
+        <script type="text/javascript"> var ai_score = parseInt('{{ai_score}}');</script>
+        <script type="text/javascript"> var traj_id = '{{traj_id}}';</script>
+        <script type="text/javascript"> window.Javatari_IMAGES_PATH = '{{ url_for('static',filename='img/') }}';</script>
+        <script type="text/javascript"> var ROM_PATH = '{{ url_for('static',filename='roms/') }}';</script>
+        <script src="../static/js/trial_javatari.js"></script>
+        <script src="../static/js/ui.js"></script>
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static',filename='css/style.css') }}"></style>
+    </head>
+
+    <script>
+
+      update_score("1 min. remaining");
+      var total_time = 0;
+      var upload_blobs = false;  // to see if we can move on to the next html
+      var file_count = -2;        // for upload file names
+
+      var enable_ui = true;
+      var chunks = [];
+      //var bufferArray = [];
+      var leftArray = [];
+      var rightArray = [];
+      var arrayLength = 0;
+
+      var click_start = Date.now();
+
+      var started = false;
+      var clicked = false; // will turn true when the user hits the button (or a simulated click occurs)
+
+      var finished_uploading = false;
+      var found = false;
+      var mic_enabled = false;
+      let stream = navigator.mediaDevices.getUserMedia({video: false, audio: true})
+      .then(
+        async function(s) {
+          mic_enabled = true;
+          if (rom == "revenge" || rom == "seaquest") {
+	            var control = jt.ConsoleControls.RESET;
+	            var controlsSocket = Javatari.room.console.getControlsSocket();
+              
+              await start_recording_audio();
+
+              /// simulate a click
+              controlsSocket.controlStateChanged(control, true);
+              Javatari.room.console.resetEnv();
+              setTimeout(function() {controlsSocket.controlStateChanged(control, false)}, 100);
+              clicked = true;
+              $("#reset").css("background-color", "green");
+              $("#reset").html("Game has started");
+          }
+        }
+      )
+      .catch(
+        function(err) {
+          stream = null;
+          //replace this with whatever blank url later
+          window.location.replace("/mic");
+        }
+      );
+
+
+    </script>
+
+    <body>
+      <div class="main-block-game">
+      <br>
+      <div class="parent">
+        <div class="right">
+          <div class="score" id="mturk-key">
+            <span id="ai-bar-text"></span>
+          </div>
+          <div id="controls">
+            <h2>Controls</h3>
+            <div id="game-desc"></div>
+          </div>
+        </div>
+        <div id="javatari-screen"></div>
+        <div>
+          <div id="reset">Start new game<br/></div>
+          <!div id="sound-btn"></div>
+        </div>
+      </div>
+    <div id="footer">
+      <p>This was created from the AtariGrandChallenge repository created by yobibyte on The Grand Atari Challenge Dataset paper.</p>
+      <p>Java, Atari and Video Computer System are trademarks of their respective owners.</p>
+    </div>
+    </body>
+
+</html>

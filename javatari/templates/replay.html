@@ -1,0 +1,138 @@
+<DOCTYPE html>
+<html>
+
+<!-- Yandex.Metrika counter --> <script type="text/javascript"> (function (d, w, c) { (w[c] = w[c] || []).push(function() { try { w.yaCounter41793274 = new Ya.Metrika({ id:41793274, clickmap:true, trackLinks:true, accurateTrackBounce:true }); } catch(e) { } }); var n = d.getElementsByTagName("script")[0], s = d.createElement("script"), f = function () { n.parentNode.insertBefore(s, n); }; s.type = "text/javascript"; s.async = true; s.src = "https://mc.yandex.ru/metrika/watch.js"; if (w.opera == "[object Opera]") { d.addEventListener("DOMContentLoaded", f, false); } else { f(); } })(document, window, "yandex_metrika_callbacks"); </script> <noscript><div><img src="https://mc.yandex.ru/watch/41793274" style="position:absolute; left:-9999px;" alt="" /></div></noscript> <!-- /Yandex.Metrika counter -->
+    <!audio width="300" height="300" id="my-preview" class="my-preview" autoplay muted></audio>
+    <div><audio controls autoplay playsinline hidden></audio></div>
+
+    <head lang="en">
+        <meta charset="UTF-8">
+        <title>RoboAtari</title>
+        <script src="https://www.WebRTC-Experiment.com/RecordRTC.js"></script>
+        <script type="text/javascript" 
+                src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+        <script type="text/javascript"> var replay = '{{replay}}'==='True';</script>
+        <script type="text/javascript"> var rom = '{{rom}}';</script>
+        <script type="text/javascript"> var ai_score = parseInt('{{ai_score}}');</script>
+        <script type="text/javascript"> var traj_id = '{{traj_id}}';</script>
+        <script type="text/javascript"> var seconds = '{{seconds}}';</script>
+        <script type="text/javascript"> var old_time = '{{old_time}}';</script>
+        <script type="text/javascript"> window.Javatari_IMAGES_PATH = '{{ url_for('static',filename='img/') }}';</script>
+        <script type="text/javascript"> var ROM_PATH = '{{ url_for('static',filename='roms/') }}';</script>
+        <script src="../static/js/replayatari.js"></script>
+        <script src="../static/js/ui.js"></script>
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static',filename='css/style.css') }}"></style>
+    </head>
+
+    <script>
+      var id = traj_id.slice(0, 10);
+      var id2 = traj_id.slice(10);
+      var splitted = traj_id.split("_");
+      var image_upload_count = 0;
+      //var sound1 = new sound("../static/sound/" + traj_id + ".wav", false);
+      //var sound2 = new sound("../static/sound/" + traj_id + "_atari" + id2 + ".wav", false);
+
+      //function sound(src, loop) {
+      //    this.sound = document.createElement("audio");
+      //    this.sound.src = src;
+      //    this.sound.setAttribute("preload", "auto");
+      //    this.sound.setAttribute("controls", "none");
+      //    this.sound.style.display = "none";
+      //    this.sound.loop = loop;
+      //    document.body.appendChild(this.sound);
+      //    this.play = function(){
+	     //       this.sound.play();
+      //    }
+      //    this.stop = function(){
+	     //       this.sound.pause();
+      //    }
+      //} 
+      seconds = parseInt(seconds);
+      old_time = parseInt(old_time);
+        
+      console.log("new_time: " + seconds);
+      console.log("old_time: " + old_time);
+
+      var adjusted_sample_rate = (44100 * old_time) / seconds;
+
+      var context1 = new AudioContext({sampleRate : adjusted_sample_rate});
+      var context2 = new AudioContext({sampleRate : adjusted_sample_rate});
+      var buffer1 = null;
+      var buffer2 = null;
+
+      var new_time;
+      //var merged_buffer  = null;
+
+      //async function merge_buffers_together() {
+      //  console.log("merging");
+      //  console.log(buffer1);
+      //  console.log(buffer2);
+      //}
+
+      async function get_sound_buffer(url, dest_buffer, context) {
+          return new Promise(async function(resolve, reject){
+              var request = new XMLHttpRequest();
+
+              request.open('GET', url, true);
+              request.responseType = 'arraybuffer';
+              request.onload = function() {
+                  var audioData = request.response;
+
+                  context.decodeAudioData(audioData, function(buffer) {
+                    if (dest_buffer == 1) {
+                      buffer1 = buffer;
+                      console.log("yay");
+                    }
+                    else {
+                      buffer2 = buffer;
+                      console.log("yay");
+                    }
+                    resolve(request.status)
+                    //if (buffer1 != null && buffer2 != null) {
+                    //  merge_buffers_together();
+                    //}
+                  }, function(e) {
+                    console.log("error");
+                    reject(request.status)
+                  });
+              }
+              request.send();
+          });
+      }
+
+      async function get_buffers() {
+        await get_sound_buffer("../static/sound/" + traj_id + ".wav", 1, context1);
+        await get_sound_buffer("../static/sound/" + splitted[0] + "_" + splitted[1] +
+                               "_atari_" + splitted[2] + ".wav", 2, context2);
+        console.log(buffer1);
+        console.log(buffer2);
+      }
+
+    </script>
+
+    <body>
+      <div class="main-block-game">
+      <br>
+      <div class="parent">
+        <div class="right">
+          <div class="score" id="mturk-key">
+            <span id="ai-bar-text"></span>
+          </div>
+          <div id="controls">
+            <h2>Controls</h3>
+            <div id="game-desc"></div>
+          </div>
+        </div>
+        <div id="javatari-screen"></div>
+        <div>
+          <div id="reset">Start new game<br/></div>
+          <!div id="sound-btn"></div>
+        </div>
+      </div>
+    <div id="footer">
+      <p>This was created from the AtariGrandChallenge repository created by yobibyte on The Grand Atari Challenge Dataset paper.</p>
+      <p>Java, Atari and Video Computer System are trademarks of their respective owners.</p>
+    </div>
+    </body>
+
+</html>

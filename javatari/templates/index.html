@@ -1,0 +1,189 @@
+<DOCTYPE html>
+<html>
+
+<!-- Yandex.Metrika counter --> <script type="text/javascript"> (function (d, w, c) { (w[c] = w[c] || []).push(function() { try { w.yaCounter41793274 = new Ya.Metrika({ id:41793274, clickmap:true, trackLinks:true, accurateTrackBounce:true }); } catch(e) { } }); var n = d.getElementsByTagName("script")[0], s = d.createElement("script"), f = function () { n.parentNode.insertBefore(s, n); }; s.type = "text/javascript"; s.async = true; s.src = "https://mc.yandex.ru/metrika/watch.js"; if (w.opera == "[object Opera]") { d.addEventListener("DOMContentLoaded", f, false); } else { f(); } })(document, window, "yandex_metrika_callbacks"); </script> <noscript><div><img src="https://mc.yandex.ru/watch/41793274" style="position:absolute; left:-9999px;" alt="" /></div></noscript> <!-- /Yandex.Metrika counter -->
+    <!audio width="300" height="300" id="my-preview" class="my-preview" autoplay muted></audio>
+    <div><audio controls autoplay playsinline hidden></audio></div>
+
+    <head lang="en">
+        <meta charset="UTF-8">
+        <title>RoboAtari</title>
+        <script src="https://www.WebRTC-Experiment.com/RecordRTC.js"></script>
+        <script type="text/javascript" 
+                src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+        <script type="text/javascript"> var replay = '{{replay}}'==='True';</script>
+        <script type="text/javascript"> var rom = '{{rom}}';</script>
+        <script type="text/javascript"> var ai_score = parseInt('{{ai_score}}');</script>
+        <script type="text/javascript"> var traj_id = '{{traj_id}}';</script>
+        <script type="text/javascript"> var s3_code = '{{key}}';</script>
+        <script type="text/javascript"> window.Javatari_IMAGES_PATH = '{{ url_for('static',filename='img/') }}';</script>
+        <script type="text/javascript"> var ROM_PATH = '{{ url_for('static',filename='roms/') }}';</script>
+        <!script src="../static/js/javatari.js"></script>
+        <script src="../static/js/javatari.js"></script>
+        <script src="../static/js/ui.js"></script>
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static',filename='css/style.css') }}"></style>
+    </head>
+
+    <script>
+        const MIN_TILL_COMPLETION = 10;
+        var max_time = MIN_TILL_COMPLETION * 60000;
+
+        var timer_start = 0;
+        var first_iter = true;
+        var restart_bool = false;
+        var restarted = false;
+        //var save_the_event;
+        var clicked = false; // will turn true when the user hits the button (or a simulated click occurs)
+
+        var time_array = []; // holds json time information
+        var time_helper;
+
+        var click_start  = Date.now(); //used for buffer on not automatically ending stuff
+
+        var total_time = 0;
+        var upload_blobs = false;  // to see if we can move on to the next html
+        var file_count = 0;        // for upload file names
+        //if (rom == "revenge" || rom == "qbert") {
+        //  file_count = 1;        // for upload file names
+        //}
+
+        var numUploaded = 0;
+        var enable_ui = true;
+        var is_zero = true;
+
+        var chunks = [];
+        //var bufferArray = [];
+        var leftArray = [];
+        var rightArray = [];
+        var arrayLength = 0;
+
+        var started = false;
+        var started_atari = false;
+
+        var finished_uploading = false;
+        var found = false;
+        var mic_enabled = false;
+        var stream = navigator.mediaDevices.getUserMedia({video: false, audio: true})
+        .then(
+          async function(s) {
+            mic_enabled = true;
+            if (rom == "revenge" || rom == "seaquest") {
+	            var control = jt.ConsoleControls.RESET;
+	            var controlsSocket = Javatari.room.console.getControlsSocket();
+              
+              await start_recording_audio();
+
+              /// simulate a click
+              controlsSocket.controlStateChanged(control, true);
+              Javatari.room.console.resetEnv();
+              setTimeout(function() {controlsSocket.controlStateChanged(control, false)}, 100);
+              //controlsSocket.controlStateChanged(control, false);
+              clicked = true;
+              $("#reset").css("background-color", "green");
+              $("#reset").html("Game has started");
+            }
+          }
+        )
+        .catch(
+          function(err) {
+            stream = null;
+            //replace this with whatever blank url later
+            //console.log(err);
+            window.location.replace("/mic");
+          }
+        );
+
+
+        var update_rom_state = function(terminal, prev_lives, startTime, prev, lives) {
+            if (started == true && terminal == false && prev_lives != -1) {
+                //console.log("inside if statement");
+                //update the time
+                var curr_time = Date.now();
+                total_time += curr_time - startTime;
+                startTime = curr_time;
+
+                var calc = Math.ceil((max_time - total_time) / 60000);
+                var changed = false;
+                if (calc > 0 && prev != calc) {
+                    changed = true;
+                    prev = calc;
+                }
+                else if (calc == 0) {
+                    // theoretically should never be called
+                    terminal = true;
+                    return [terminal, prev_lives, startTime, prev, lives];
+                }
+
+                if (lives + 1 == prev_lives) {
+                    changed = true;
+                    prev_lives = lives;
+                }
+
+                //if (changed == true && this.lives > 0) {
+                if (changed == true) {
+                    if (rom == 'enduro') {
+                        update_score(prev.toFixed(0) + " min. remaining");
+                    }
+                    else {
+                        update_score(prev.toFixed(0) + " min. remaining : " + lives + " live(s) left");
+                    }
+                }
+
+                //else if (changed == true && this.lives == 1 && this.prev_lives != -1) {
+                //    update_score(this.prev.toFixed(0) + " min. remaining : 1 life left");
+                //}
+            }
+            //console.log("started: " + started + " terminal: " + terminal + " prev_lives: " + prev_lives);
+            return [terminal, prev_lives, startTime, prev, lives];
+        }
+
+        var terminating_timestep = function(terminal, prev_lives, lives) {
+            //console.log("terminating_timestep: " + prev_lives + " " + lives);
+            if (terminal == true && started == true && prev_lives != -1 && lives == 0 && Date.now() - click_start > 5000) {
+                file_count += 1;
+                started = false;
+                prev_lives = -1;
+                if (total_time >= max_time) {
+                    total_time = max_time;
+                    update_score("Processing your data...");
+                    upload_blobs = true;
+                    setTimeout(function() {
+                        window.location.replace("/last");
+                    }, 15000);
+                }
+                else {
+                    update_score("You lost all lives. Click new game to continue!");
+                }
+            }
+            return prev_lives;
+        }
+
+
+    </script>
+
+    <body>
+      <div class="main-block-game">
+      <br>
+      <div class="parent">
+        <div class="right">
+          <div class="score" id="mturk-key">
+            <span id="ai-bar-text"></span>
+          </div>
+          <div id="controls">
+            <h2>Controls</h3>
+            <div id="game-desc"></div>
+          </div>
+        </div>
+        <div id="javatari-screen"></div>
+        <div>
+          <div id="reset">Start new game<br/></div>
+          <!div id="sound-btn"></div>
+        </div>
+      </div>
+    <div id="footer">
+      <p>This was created from the AtariGrandChallenge repository created by yobibyte on The Grand Atari Challenge Dataset paper.</p>
+      <p>Java, Atari and Video Computer System are trademarks of their respective owners.</p>
+    </div>
+    </body>
+
+</html>

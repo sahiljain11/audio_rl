@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+
+  <!-- Yandex.Metrika counter --> <script type="text/javascript"> (function (d, w, c) { (w[c] = w[c] || []).push(function() { try { w.yaCounter41793274 = new Ya.Metrika({ id:41793274, clickmap:true, trackLinks:true, accurateTrackBounce:true }); } catch(e) { } }); var n = d.getElementsByTagName("script")[0], s = d.createElement("script"), f = function () { n.parentNode.insertBefore(s, n); }; s.type = "text/javascript"; s.async = true; s.src = "https://mc.yandex.ru/metrika/watch.js"; if (w.opera == "[object Opera]") { d.addEventListener("DOMContentLoaded", f, false); } else { f(); } })(document, window, "yandex_metrika_callbacks"); </script> <noscript><div><img src="https://mc.yandex.ru/watch/41793274" style="position:absolute; left:-9999px;" alt="" /></div></noscript> <!-- /Yandex.Metrika counter -->
+
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <!-- survey jquery-->
+    <script type="text/javascript" src="https://unpkg.com/survey-jquery/survey.jquery.min.js"></script>
+    <link href="https://unpkg.com/survey-jquery/modern.min.css" type="text/css" rel="stylesheet">
+    <head lang="en">
+        <meta charset="UTF-8">
+        <title>RoboAtari</title>
+        <script type="text/javascript"> var s3_code = '{{key}}';</script>
+        <!--
+
+        <script src="../../static/js/javatari.js"></script>
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static',filename='css/style.css') }}"></style>
+        -->
+    </head>
+    <div id="surveyContainer" style="display:none"></div>
+
+    <script>
+        async function getSignedRequest (file, stringname, keyname, isJson){
+            var xhr = new XMLHttpRequest();
+ 
+            xhr.open("GET", "/sign_s3?file_name="+keyname+"&file_type="+stringname);
+            xhr.onreadystatechange = function(){
+                if(xhr.readyState === 4){
+                    if(xhr.status === 200){
+                        var response = JSON.parse(xhr.responseText);
+                        uploadFile(file, response.data, response.url, response, isJson, keyname);
+                    }
+                    else{
+                        //alert("Could not get signed URL.");
+                    }
+                }   
+            };
+            xhr.send();
+        }
+
+        async function uploadFile(file, s3Data, url, confirm, isJson, stringname){
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", s3Data.url);
+
+            var postData = new FormData();
+            for(s3key in s3Data.fields){
+                postData.append(s3key, s3Data.fields[s3key]);
+            }
+            if (isJson) {
+                postData.append('file', JSON.stringify(file));
+            } else {
+                postData.append('file', file);
+            }
+
+            xhr.onload = async function () {
+                  if (xhr.status == 200 || xhr.status == 204) {
+                    // display the key to the user
+                  }
+                  else {
+                      console.log("Status? " + xhr.status)
+                  }
+            }
+
+            xhr.send(postData);
+        }
+
+        async function print_survey() {
+            Survey.StylesManager.applyTheme("modern");
+
+            var surveyJSON = {
+              "completedHtml": "<h1>Thank you for your participation! Please enter the following into MTurk: " + s3_code + "</h1>",
+              "pages":[{"name":"page2","elements":[
+              {"type":"text","name":"age","title":"What is your age?","isRequired":true},
+              {"type":"text","name":"gender","title":"If you prefer to reveal your gender, please mention it here:","isRequired":false},
+              {"type":"radiogroup","name":"difficult","title":"How difficult did you find the task of playing the game to maximize the agent's score?","isRequired":true,"choices":[
+                {"value":"very_difficult","text":"Very Difficult"},
+                {"value":"difficult","text":"Difficult"},
+                {"value":"neutral","text":"Neutral"},
+                {"value":"easy","text":"Easy"},
+                {"value":"very_easy","text":"Very Easy"}
+              ]},
+              {"type":"radiogroup","name":"description","title":"Which of the following more appropriately describes you:","isRequired":true,"choices":[
+                {"value":"introvert","text":"Introvert"},
+                {"value":"extrovert","text":"Extrovert"}
+              ]},
+              {"type":"radiogroup","name":"talkative","title":"In general social settings, you are a person who is:","isRequired":true,"choices":[
+                {"value":"very","text":"Very talkative"},
+                {"value":"moderately","text":"Moderately talkative"},
+                {"value":"not","text":"Not very talkative"}
+              ]},
+              {"type":"radiogroup","name":"pet","title":"Do you own a pet?","isRequired":true,"choices":[
+                {"value":"yes","text":"Yes"},
+                {"value":"no","text":"No"}
+              ]},
+              {"type":"text","name":"math","title":"What is 53-21?","isRequired":true},
+              {"type":"radiogroup","name":"audiosignals","title":"While teaching the robot, what kind of audio signals did you provide?","isRequired":true,"choices":[
+                {"value":"speech","text":"Speech describing your demonstration to perform the task"},
+                {"value":"verbal","text":"Verbal reactions (not necessarily spoken words such as \"aah\", \"oh\", \"ouch\" etc.)"},
+                {"value":"both","text":"Both"},
+                {"value":"none","text":"None"}
+              ]},
+              {"type":"radiogroup","name":"spoken","title":"How much of speech/spoken English words did you use during your demonstrations?","isRequired":true,"choices":[
+                {"value":"never","text":"Never"},
+                {"value":"rarely","text":"Rarely"},
+                {"value":"sometimes","text":"Sometimes"},
+                {"value":"often","text":"Often"},
+                {"value":"always","text":"Always"}
+              ]},
+              {"type":"radiogroup","name":"filler","title":"How much of filler words/verbal reactions (such as \"aah\", \"oops\", \"umm\", \"hmmm\" etc.)  did you use during your demonstrations?","isRequired":true,"choices":[
+                {"value":"never","text":"Never"},
+                {"value":"rarely","text":"Rarely"},
+                {"value":"sometimes","text":"Sometimes"},
+                {"value":"often","text":"Often"},
+                {"value":"always","text":"Always"}
+              ]},
+              {"type":"text","name":"feedback","title":"Is there any feedback you would like to give?","isRequired":true},
+            ], "title":"Survey questions","description":"Please answer these questions as accurately as possible"}]}
+
+            function sendDataToServer(survey) {
+                json_survey_data = survey.data;
+                var surveyname = "application/json";
+                var keysurveyname = s3_code + "_survey.json";
+                getSignedRequest(json_survey_data, surveyname, keysurveyname, true);
+            }
+
+            var survey = new Survey.Model(surveyJSON);
+            $("#surveyContainer").Survey({
+                model: survey,
+                onComplete: sendDataToServer
+            });
+        }
+
+        $("#surveyContainer").show();
+        print_survey();
+    </script>
+
+    <!--
+
+    <body class="about">
+      <div class='main-block'>
+        <h1>
+           Thanks for your help in saving the Earth!
+        </h1>  
+        <p id='output'></p>
+        <p>
+          Please remember to fill out the survey below to be fully approved!
+        </p>
+
+				<p style="font-size:48" id="go"><a href=https://forms.gle/aDj3X3TjC15XCUW76 target="_blank">Survey</a>!</p>
+
+    <script>
+      window.onload = function() {
+        var key = '{{key}}';
+        document.getElementById('output').innerHTML = "Your MTurk key is as follows: " + key;
+      }
+    </script>
+
+
+    -->
+</html>
