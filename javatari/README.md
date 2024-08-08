@@ -1,6 +1,6 @@
 # RoboAtari Repository
 Code for the Experiment for the inverse reinforcement learning experiment in training T-REX with audio snippets.
-![Atari on Javascript with Audio Recording](javatari/static/atari.png)
+![Atari on Javascript with Audio Recording](static/atari.png)
 
 ## Installation
 
