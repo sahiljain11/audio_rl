@@ -1,5 +1,6 @@
 # interrl_exp
 Code for the Experiment for the Wizard-of-Oz experiment for testing interactive audio reinforcement learning.
+![Wizard of Oz RoboTaxi Experiment](static/wizard_of_oz.png)
 
 # Socket Diagram
 ![Socket Diagram](static/Socket_Diagram.jpg)
