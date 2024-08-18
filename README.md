@@ -1,6 +1,6 @@
 # Prosody as a Teaching Signal for Agent Learning: Exploratory Studies and Algorithmic Implications
 
-![Wizard of Oz RoboTaxi Experiment](wizard_of_oz/static/wizard_of_oz.png)
+![Wizard of Oz RoboTaxi Experiment](wizard_of_oz/static/summary.png)
 
 ![Atari on Javascript with Audio Recording](javatari/static/atari.png)
 
