@@ -1,5 +1,5 @@
 # RoboAtari Repository
-Code for the Experiment for the inverse reinforcement learning experiment in training T-REX with audio snippets.
+Code for the Learning from Demonstration (LfD) experiment where the human demonstrator's speech cues are used to train T-REX agents for three different Atari games (Space Invaders, Ms Pacman, Seaquest). This folder contains code for recording the speech of a human teacher (synchronized with their actions) as they demonstrate how to play one of the games.
 ![Atari on Javascript with Audio Recording](static/atari.png)
 
 ## Installation
