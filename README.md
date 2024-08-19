@@ -22,5 +22,5 @@ If you find our work to be useful in your research, please cite:
   }
 ```
 
-Matilda Knierim, Sahil Jain, Murat Han Aydoğan, Kenneth Mitra, Kush Desai, Akanksha Saran, and Kim Baraka. 2024. Prosody as a Teaching Signal for Agent Learning: Exploratory Studies and Algorithmic Implications. In
-INTERNATIONAL CONFERENCE ON MULTIMODAL INTERACTION (ICMI’24), November 4–8, 2024, San Jose, Costa Rica. ACM, New York, NY, USA, 29 pages. https://doi.org/10.1145/3678957.3685735
+<!-- Matilda Knierim, Sahil Jain, Murat Han Aydoğan, Kenneth Mitra, Kush Desai, Akanksha Saran, and Kim Baraka. 2024. Prosody as a Teaching Signal for Agent Learning: Exploratory Studies and Algorithmic Implications. In
+INTERNATIONAL CONFERENCE ON MULTIMODAL INTERACTION (ICMI’24), November 4–8, 2024, San Jose, Costa Rica. ACM, New York, NY, USA, 29 pages. https://doi.org/10.1145/3678957.3685735 -->
