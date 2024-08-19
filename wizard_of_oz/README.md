@@ -1,6 +1,6 @@
 # interrl_exp
 Code for the interactive RL experiment to evaluate the role of a human teacher's prosodic cues for agent learning. We use a mixed participant Wizardof-Oz (WoZ) approach where one participant plays the role of a teacher, and the other participant with no information about the task plays the role of a Wizard. While the teacher sees the full environment and provides online verbal feedback to the agent in real-time, the Wizard is only shown a sanitized view of the environment that solely shows the grid. The Wizard also receives the teacher audio in real-time (streamed through Twilio, a secure web service) and needs to control the agent through keystrokes in response to current and past feedback from the teacher. The two environments are synchronized over web sockets to ensure consistent agent positions on both interfaces, and data is automatically and securely stored on a cloud bucket. The code for this pipeline, including a data visualization replay tool are made available here.
-![Wizard of Oz RoboTaxi Experiment](static/wizard_of_oz.png)
+![Wizard of Oz RoboTaxi Experiment](static/summary.jpg)
 
 # Socket Diagram
 ![Socket Diagram](static/Socket_Diagram.jpg)
